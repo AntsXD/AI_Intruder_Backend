@@ -57,6 +57,8 @@ backend/
    - Set `FIREBASE_CREDENTIALS_PATH` to service account JSON path.
 4. Optional SMTP:
    - Set `SMTP_ENABLED=true`, username, app password, sender.
+5. Camera stream tokens:
+   - `STREAM_TOKEN_MINUTES` (default: 10) - token expiry duration for camera feed access.
 
 ## Run
 ```bash
@@ -118,6 +120,8 @@ If Firebase is not configured, demo token format is accepted:
 - `PUT /api/v1/users/{user_id}/properties/{pid}/persons/{person_id}`
 - `DELETE /api/v1/users/{user_id}/properties/{pid}/persons/{person_id}`
 - `POST /api/v1/users/{user_id}/properties/{pid}/persons/{person_id}/photos`
+- `GET /api/v1/users/{user_id}/properties/{pid}/persons/{person_id}/photos/{photo_id}`
+- `DELETE /api/v1/users/{user_id}/properties/{pid}/persons/{person_id}/photos/{photo_id}`
 - `POST /api/v1/users/{user_id}/properties/{pid}/persons/{person_id}/activate`
 
 ### Protocols
@@ -125,7 +129,7 @@ If Firebase is not configured, demo token format is accepted:
 - `PUT /api/v1/users/{user_id}/properties/{pid}/protocols`
 
 ### Events
-- `GET /api/v1/users/{user_id}/properties/{pid}/events`
+- `GET /api/v1/users/{user_id}/properties/{pid}/events` (supports query params: `limit`, `offset`, `status_filter`)
 - `GET /api/v1/users/{user_id}/properties/{pid}/events/{eid}`
 - `POST /api/v1/users/{user_id}/properties/{pid}/events/{eid}/verify`
 
@@ -154,6 +158,16 @@ If Firebase is not configured, demo token format is accepted:
   "person_id": null,
   "snapshot_base64": "<base64-jpeg>",
   "note": "Unknown face detected at front door"
+}
+```
+
+## Response Examples
+
+### Photo Upload Response
+```json
+{
+  "photo_id": 1,
+  "file_path": "storage/property_1/person_2/photo_1.jpg"
 }
 ```
 
