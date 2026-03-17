@@ -1,0 +1,33 @@
+import pytest
+
+
+@pytest.mark.parametrize(
+    "score,expected_status",
+    [
+        (45.0, "verified_intruder"),
+        (60.0, "human_review"),
+        (85.0, "verified_owner"),
+    ],
+)
+def test_webhook_threshold_branches(client, webhook_headers, make_auth_headers, score: float, expected_status: str) -> None:
+    user_id, headers = make_auth_headers(uid=f"u-{int(score)}")
+
+    prop = client.post(
+        f"/api/v1/users/{user_id}/properties",
+        json={"name": "Main House", "address": "Demo Address"},
+        headers=headers,
+    )
+    assert prop.status_code == 200
+    pid = prop.json()["id"]
+
+    hook = client.post(
+        "/api/v1/webhooks/intruder",
+        json={"property_id": pid, "similarity_score": score, "note": "threshold test"},
+        headers=webhook_headers,
+    )
+    assert hook.status_code == 200
+    event_id = hook.json()["event_id"]
+
+    event = client.get(f"/api/v1/users/{user_id}/properties/{pid}/events/{event_id}", headers=headers)
+    assert event.status_code == 200
+    assert event.json()["status"] == expected_status

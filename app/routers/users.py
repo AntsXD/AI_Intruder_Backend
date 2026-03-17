@@ -1,0 +1,530 @@
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import Session
+from pathlib import Path
+
+from app.dependencies import ensure_user_scope, get_current_user, get_db_session
+from app.models import Event, EventVerification, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent
+from app.models.entities import EventStatus
+from app.schemas.schemas import (
+    ConsentRequest,
+    EventOut,
+    PersonActivationResponse,
+    PersonCreate,
+    PersonOut,
+    PersonUpdate,
+    PropertyCreate,
+    PropertyOut,
+    PropertyUpdate,
+    ProtocolCreate,
+    ProtocolOut,
+    UserOut,
+    UserUpdate,
+    VerifyEventRequest,
+)
+from app.config import settings
+from app.services.file_service import remove_dir_if_exists, remove_file_if_exists, save_person_photo, to_storage_relative
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+
+def _get_property_for_user(db: Session, user_id: int, property_id: int) -> Property:
+    property_obj = db.scalar(select(Property).where(and_(Property.id == property_id, Property.user_id == user_id)))
+    if not property_obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
+    return property_obj
+
+
+@router.get("/{user_id}", response_model=UserOut)
+def get_user(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db_session)) -> UserOut:
+    ensure_user_scope(user_id, current_user)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+@router.put("/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> UserOut:
+    ensure_user_scope(user_id, current_user)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if payload.full_name is not None:
+        user.full_name = payload.full_name
+    if payload.phone_number is not None:
+        user.phone_number = payload.phone_number
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/{user_id}")
+def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # GDPR-friendly cleanup for filesystem artifacts owned by this user.
+    for property_obj in user.properties:
+        for person in property_obj.persons:
+            for photo in person.photos:
+                remove_file_if_exists(photo.file_path)
+        for event in property_obj.events:
+            remove_file_if_exists(event.snapshot_path)
+
+    remove_dir_if_exists(settings.storage_root_path / "persons" / str(user_id))
+
+    db.delete(user)
+    db.commit()
+    return {"message": "User and associated data deleted"}
+
+
+@router.post("/{user_id}/consent")
+def add_consent(
+    user_id: int,
+    payload: ConsentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    db.add(UserConsent(user_id=user_id, consent_type=payload.consent_type, accepted=payload.accepted))
+    db.commit()
+    return {"message": "Consent recorded"}
+
+
+@router.get("/{user_id}/properties", response_model=list[PropertyOut])
+def list_properties(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> list[PropertyOut]:
+    ensure_user_scope(user_id, current_user)
+    rows = db.scalars(select(Property).where(Property.user_id == user_id).order_by(Property.id.desc())).all()
+    return list(rows)
+
+
+@router.post("/{user_id}/properties", response_model=PropertyOut)
+def create_property(
+    user_id: int,
+    payload: PropertyCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> PropertyOut:
+    ensure_user_scope(user_id, current_user)
+    property_obj = Property(user_id=user_id, name=payload.name, address=payload.address)
+    db.add(property_obj)
+    db.commit()
+    db.refresh(property_obj)
+    return property_obj
+
+
+@router.get("/{user_id}/properties/{pid}", response_model=PropertyOut)
+def get_property(
+    user_id: int,
+    pid: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> PropertyOut:
+    ensure_user_scope(user_id, current_user)
+    return _get_property_for_user(db, user_id, pid)
+
+
+@router.put("/{user_id}/properties/{pid}", response_model=PropertyOut)
+def update_property(
+    user_id: int,
+    pid: int,
+    payload: PropertyUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> PropertyOut:
+    ensure_user_scope(user_id, current_user)
+    property_obj = _get_property_for_user(db, user_id, pid)
+    if payload.name is not None:
+        property_obj.name = payload.name
+    if payload.address is not None:
+        property_obj.address = payload.address
+    db.commit()
+    db.refresh(property_obj)
+    return property_obj
+
+
+@router.delete("/{user_id}/properties/{pid}")
+def delete_property(
+    user_id: int,
+    pid: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    property_obj = _get_property_for_user(db, user_id, pid)
+
+    for person in property_obj.persons:
+        for photo in person.photos:
+            remove_file_if_exists(photo.file_path)
+    for event in property_obj.events:
+        remove_file_if_exists(event.snapshot_path)
+
+    remove_dir_if_exists(settings.storage_root_path / "persons" / str(user_id) / str(pid))
+    remove_dir_if_exists(settings.storage_root_path / "events" / str(pid))
+
+    db.delete(property_obj)
+    db.commit()
+    return {"message": "Property deleted"}
+
+
+@router.get("/{user_id}/properties/{pid}/persons", response_model=list[PersonOut])
+def list_persons(
+    user_id: int,
+    pid: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> list[PersonOut]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    rows = db.scalars(select(Person).where(Person.property_id == pid).order_by(Person.id.desc())).all()
+    return list(rows)
+
+
+@router.post("/{user_id}/properties/{pid}/persons", response_model=PersonOut)
+def create_person(
+    user_id: int,
+    pid: int,
+    payload: PersonCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> PersonOut:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    person = Person(property_id=pid, name=payload.name)
+    db.add(person)
+    db.commit()
+    db.refresh(person)
+    return person
+
+
+@router.get("/{user_id}/properties/{pid}/persons/{person_id}", response_model=PersonOut)
+def get_person(
+    user_id: int,
+    pid: int,
+    person_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> PersonOut:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    person = db.scalar(select(Person).where(and_(Person.id == person_id, Person.property_id == pid)))
+    if not person:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
+    return person
+
+
+@router.put("/{user_id}/properties/{pid}/persons/{person_id}", response_model=PersonOut)
+def update_person(
+    user_id: int,
+    pid: int,
+    person_id: int,
+    payload: PersonUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> PersonOut:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    person = db.scalar(select(Person).where(and_(Person.id == person_id, Person.property_id == pid)))
+    if not person:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
+    if payload.name is not None:
+        person.name = payload.name
+    db.commit()
+    db.refresh(person)
+    return person
+
+
+@router.delete("/{user_id}/properties/{pid}/persons/{person_id}")
+def delete_person(
+    user_id: int,
+    pid: int,
+    person_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    person = db.scalar(select(Person).where(and_(Person.id == person_id, Person.property_id == pid)))
+    if not person:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
+    for photo in person.photos:
+        remove_file_if_exists(photo.file_path)
+    db.delete(person)
+    db.commit()
+    return {"message": "Person deleted"}
+
+
+@router.post("/{user_id}/properties/{pid}/persons/{person_id}/activate", response_model=PersonActivationResponse)
+def activate_person(
+    user_id: int,
+    pid: int,
+    person_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> PersonActivationResponse:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+
+    person = db.scalar(select(Person).where(and_(Person.id == person_id, Person.property_id == pid)))
+    if not person:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
+
+    photo_count = db.scalar(select(func.count(PersonPhoto.id)).where(PersonPhoto.person_id == person_id)) or 0
+    has_display_photo = bool(person.display_photo_path)
+
+    if photo_count < 3:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least 3 photos are required")
+    if photo_count > 5:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Maximum 5 photos allowed")
+    if not has_display_photo:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Display photo is required")
+
+    person.is_active = True
+    db.commit()
+
+    return PersonActivationResponse(
+        person_id=person.id,
+        is_active=person.is_active,
+        photo_count=photo_count,
+        has_display_photo=has_display_photo,
+        message="Person activated for recognition",
+    )
+
+
+@router.post("/{user_id}/properties/{pid}/persons/{person_id}/photos")
+async def upload_person_photo(
+    user_id: int,
+    pid: int,
+    person_id: int,
+    is_display: bool = False,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str | int]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    person = db.scalar(select(Person).where(and_(Person.id == person_id, Person.property_id == pid)))
+    if not person:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
+
+    count = db.scalar(select(func.count(PersonPhoto.id)).where(PersonPhoto.person_id == person_id))
+    if count is not None and count >= 5:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A person can only have up to 5 photos")
+
+    path = await save_person_photo(user_id, pid, person_id, file)
+    if is_display:
+        person.display_photo_path = path
+        for old in person.photos:
+            old.is_display = False
+
+    photo = PersonPhoto(person_id=person_id, file_path=path, is_display=is_display)
+    db.add(photo)
+    db.commit()
+    db.refresh(photo)
+    return {"photo_id": photo.id, "file_path": to_storage_relative(photo.file_path)}
+
+
+@router.get("/{user_id}/properties/{pid}/persons/{person_id}/photos/{photo_id}")
+def get_person_photo(
+    user_id: int,
+    pid: int,
+    person_id: int,
+    photo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> FileResponse:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+
+    photo = db.scalar(
+        select(PersonPhoto)
+        .join(Person, Person.id == PersonPhoto.person_id)
+        .where(and_(PersonPhoto.id == photo_id, PersonPhoto.person_id == person_id, Person.property_id == pid))
+    )
+    if not photo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
+
+    if not photo.file_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file path missing")
+
+    if not Path(photo.file_path).is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found on disk")
+
+    return FileResponse(photo.file_path)
+
+
+@router.delete("/{user_id}/properties/{pid}/persons/{person_id}/photos/{photo_id}")
+def delete_person_photo(
+    user_id: int,
+    pid: int,
+    person_id: int,
+    photo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+
+    photo = db.scalar(
+        select(PersonPhoto)
+        .join(Person, Person.id == PersonPhoto.person_id)
+        .where(and_(PersonPhoto.id == photo_id, PersonPhoto.person_id == person_id, Person.property_id == pid))
+    )
+    if not photo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
+
+    person = db.get(Person, person_id)
+    if person and person.display_photo_path == photo.file_path:
+        person.display_photo_path = None
+
+    remove_file_if_exists(photo.file_path)
+    db.delete(photo)
+    db.commit()
+    return {"message": "Photo deleted"}
+
+
+@router.get("/{user_id}/properties/{pid}/protocols", response_model=list[ProtocolOut])
+def list_protocols(
+    user_id: int,
+    pid: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> list[ProtocolOut]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    rows = db.scalars(
+        select(Protocol)
+        .join(ProtocolAssignment, ProtocolAssignment.protocol_id == Protocol.id)
+        .where(ProtocolAssignment.property_id == pid)
+    ).all()
+    return list(rows)
+
+
+@router.put("/{user_id}/properties/{pid}/protocols", response_model=list[ProtocolOut])
+def set_protocols(
+    user_id: int,
+    pid: int,
+    payload: list[ProtocolCreate],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> list[ProtocolOut]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+
+    existing_assignments = db.scalars(select(ProtocolAssignment).where(ProtocolAssignment.property_id == pid)).all()
+    for assignment in existing_assignments:
+        db.delete(assignment)
+
+    result: list[Protocol] = []
+    seen_names: set[str] = set()
+    for item in payload:
+        key = item.name.strip().lower()
+        if key in seen_names:
+            continue
+        seen_names.add(key)
+
+        protocol = db.scalar(select(Protocol).where(Protocol.name == item.name))
+        if not protocol:
+            protocol = Protocol(
+                name=item.name,
+                description=item.description,
+                push_enabled=item.push_enabled,
+                email_enabled=item.email_enabled,
+                sms_enabled=item.sms_enabled,
+            )
+            db.add(protocol)
+            db.flush()
+        else:
+            protocol.description = item.description
+            protocol.push_enabled = item.push_enabled
+            protocol.email_enabled = item.email_enabled
+            protocol.sms_enabled = item.sms_enabled
+
+        db.add(ProtocolAssignment(property_id=pid, protocol_id=protocol.id))
+        result.append(protocol)
+
+    db.commit()
+    return result
+
+
+@router.get("/{user_id}/properties/{pid}/events", response_model=list[EventOut])
+def list_events(
+    user_id: int,
+    pid: int,
+    status_filter: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> list[EventOut]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+
+    query = select(Event).where(Event.property_id == pid)
+    if status_filter:
+        try:
+            parsed_status = EventStatus(status_filter)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status_filter") from exc
+        query = query.where(Event.status == parsed_status)
+    rows = db.scalars(query.order_by(Event.id.desc()).limit(limit).offset(offset)).all()
+    return list(rows)
+
+
+@router.get("/{user_id}/properties/{pid}/events/{eid}", response_model=EventOut)
+def get_event(
+    user_id: int,
+    pid: int,
+    eid: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> EventOut:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    event = db.scalar(select(Event).where(and_(Event.id == eid, Event.property_id == pid)))
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    return event
+
+
+@router.post("/{user_id}/properties/{pid}/events/{eid}/verify")
+def verify_event(
+    user_id: int,
+    pid: int,
+    eid: int,
+    payload: VerifyEventRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    event = db.scalar(select(Event).where(and_(Event.id == eid, Event.property_id == pid)))
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+    if event.status != EventStatus.HUMAN_REVIEW:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only human_review events can be verified")
+
+    db.add(EventVerification(event_id=eid, user_id=user_id, confirmed_intruder=payload.confirmed_intruder))
+    event.note = "Owner confirmed intruder" if payload.confirmed_intruder else "Owner dismissed event"
+    db.commit()
+    return {"message": "Event verification recorded"}
