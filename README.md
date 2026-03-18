@@ -202,4 +202,5 @@ If Firebase is not configured, demo token format is accepted:
 - Completed: threshold decision logic and webhook API key + optional HMAC replay protection.
 - Completed: notification channel abstraction with email and push stub.
 - Completed: secure camera feed forwarding endpoints.
-- Next: stronger test coverage, production migration path, real FCM provider integration.
+- Completed: stronger test coverage, production migration path,
+- In progress: real FCM provider integration, working on camera feed system
