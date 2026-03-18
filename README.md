@@ -62,7 +62,7 @@ backend/
 
 ## Run
 ```bash
-uvicorn app.main:app --reload --app-dir backend
+uvicorn app.main:app --reload 
 ```
 
 API docs will be available at:
