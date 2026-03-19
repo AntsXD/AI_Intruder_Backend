@@ -289,14 +289,11 @@ def activate_person(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
 
     photo_count = db.scalar(select(func.count(PersonPhoto.id)).where(PersonPhoto.person_id == person_id)) or 0
-    has_display_photo = bool(person.display_photo_path)
 
     if photo_count < 3:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least 3 photos are required")
     if photo_count > 5:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Maximum 5 photos allowed")
-    if not has_display_photo:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Display photo is required")
 
     person.is_active = True
     db.commit()
@@ -305,7 +302,7 @@ def activate_person(
         person_id=person.id,
         is_active=person.is_active,
         photo_count=photo_count,
-        has_display_photo=has_display_photo,
+        has_display_photo=True,
         message="Person activated for recognition",
     )
 
@@ -332,7 +329,6 @@ async def upload_person_photo(
 
     path = await save_person_photo(user_id, pid, person_id, file)
     if is_display:
-        person.display_photo_path = path
         for old in person.photos:
             old.is_display = False
 
@@ -392,10 +388,6 @@ def delete_person_photo(
     if not photo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
 
-    person = db.get(Person, person_id)
-    if person and person.display_photo_path == photo.file_path:
-        person.display_photo_path = None
-
     remove_file_if_exists(photo.file_path)
     db.delete(photo)
     db.commit()
@@ -447,17 +439,11 @@ def set_protocols(
             protocol = Protocol(
                 name=item.name,
                 description=item.description,
-                push_enabled=item.push_enabled,
-                email_enabled=item.email_enabled,
-                sms_enabled=item.sms_enabled,
             )
             db.add(protocol)
             db.flush()
         else:
             protocol.description = item.description
-            protocol.push_enabled = item.push_enabled
-            protocol.email_enabled = item.email_enabled
-            protocol.sms_enabled = item.sms_enabled
 
         db.add(ProtocolAssignment(property_id=pid, protocol_id=protocol.id))
         result.append(protocol)

@@ -4,9 +4,9 @@ import pytest
 @pytest.mark.parametrize(
     "score,expected_status",
     [
-        (45.0, "verified_intruder"),
+        (45.0, "intruder"),
         (60.0, "human_review"),
-        (85.0, "verified_owner"),
+        (85.0, "authorized"),
     ],
 )
 def test_webhook_threshold_branches(client, webhook_headers, make_auth_headers, score: float, expected_status: str) -> None:
@@ -30,4 +30,4 @@ def test_webhook_threshold_branches(client, webhook_headers, make_auth_headers, 
 
     event = client.get(f"/api/v1/users/{user_id}/properties/{pid}/events/{event_id}", headers=headers)
     assert event.status_code == 200
-    assert event.json()["status"] == expected_status
+    assert event.json()["ai_status"] == expected_status

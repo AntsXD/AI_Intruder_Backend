@@ -35,9 +35,7 @@ async def intruder_webhook(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="person_id is not active")
 
     event_status = map_similarity_to_status(payload.similarity_score)
-    snapshot_path = None
-    if payload.snapshot_base64:
-        snapshot_path = await save_event_snapshot_from_base64(payload.property_id, payload.snapshot_base64)
+    snapshot_path = await save_event_snapshot_from_base64(payload.property_id, payload.snapshot_base64)
 
     event = Event(
         property_id=payload.property_id,
@@ -56,10 +54,4 @@ async def intruder_webhook(
     owner_email = property_obj.user.email if property_obj.user else None
     background_tasks.add_task(run_owner_notification_flow_task, event.id, property_obj.id, owner_email)
 
-    if event_status.value == "intruder":
-        # Demo escalation placeholder for high-confidence intruder detection.
-        event.note = (event.note + " | demo_alarm=true") if event.note else "demo_alarm=true"
-        db.commit()
-        db.commit()
-
-    return {"event_id": event.id, "status": event.status.value}
+    return {"event_id": event.id, "status": event.ai_status.value}

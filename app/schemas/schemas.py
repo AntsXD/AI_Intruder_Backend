@@ -78,7 +78,6 @@ class PersonOut(BaseModel):
     id: int
     property_id: int
     name: str
-    display_photo_path: str | None
     is_active: bool
     created_at: datetime
 
@@ -88,25 +87,16 @@ class PersonOut(BaseModel):
 class ProtocolCreate(BaseModel):
     name: str
     description: str | None = None
-    push_enabled: bool = True
-    email_enabled: bool = True
-    sms_enabled: bool = False
 
 
 class ProtocolUpdate(BaseModel):
     description: str | None = None
-    push_enabled: bool | None = None
-    email_enabled: bool | None = None
-    sms_enabled: bool | None = None
 
 
 class ProtocolOut(BaseModel):
     id: int
     name: str
     description: str | None
-    push_enabled: bool
-    email_enabled: bool
-    sms_enabled: bool
 
     model_config = {"from_attributes": True}
 
@@ -117,11 +107,14 @@ class EventOut(BaseModel):
     person_id: int | None
     similarity_score: float
     ai_status: str
-    snapshot_path: str | None
+    snapshot_path: str
     occurred_at: datetime
     note: str | None
     verified_intruder: bool
     protocols_activated: bool
+    distance_meters: float | None
+    dwell_time_seconds: float | None
+    expires_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -134,15 +127,9 @@ class IntruderWebhookRequest(BaseModel):
     property_id: int
     similarity_score: float = Field(ge=0, le=100)
     person_id: int | None = None
-    snapshot_base64: str | None = None
+    snapshot_base64: str
     occurred_at: datetime | None = None
     note: str | None = None
-
-
-class NotificationPreferenceUpdate(BaseModel):
-    push_enabled: bool
-    email_enabled: bool
-    sms_enabled: bool
 
 
 class CameraFeedUpsertRequest(BaseModel):

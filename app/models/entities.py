@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 
 from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text
@@ -84,7 +84,6 @@ class Person(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     property_id: Mapped[int] = mapped_column(ForeignKey("properties.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(120))
-    display_photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -110,9 +109,6 @@ class Protocol(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    push_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    email_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    sms_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     assignments: Mapped[list[ProtocolAssignment]] = relationship(
         "ProtocolAssignment", back_populates="protocol", cascade="all, delete-orphan"
@@ -139,11 +135,14 @@ class Event(Base):
     person_id: Mapped[int | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
     similarity_score: Mapped[float] = mapped_column(Float)
     ai_status: Mapped[EventStatus] = mapped_column(SqlEnum(EventStatus), index=True)
-    snapshot_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    snapshot_path: Mapped[str] = mapped_column(String(500))
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     verified_intruder: Mapped[bool] = mapped_column(Boolean, default=False)
     protocols_activated: Mapped[bool] = mapped_column(Boolean, default=False)
+    distance_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dwell_time_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow() + timedelta(hours=72))
 
     property: Mapped[Property] = relationship("Property", back_populates="events")
     notifications: Mapped[list[NotificationLog]] = relationship(
