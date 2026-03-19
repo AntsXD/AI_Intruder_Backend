@@ -1,7 +1,6 @@
 from app.models.entities import (
     CameraStream,
     Event,
-    EventVerification,
     NotificationLog,
     Person,
     PersonPhoto,
@@ -24,6 +23,5 @@ __all__ = [
     "CameraStream",
     "StreamType",
     "Event",
-    "EventVerification",
     "NotificationLog",
 ]

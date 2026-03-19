@@ -96,7 +96,7 @@ def main() -> None:
     events.raise_for_status()
     pretty("events", {"count": len(events.json()), "items": events.json()})
 
-    human_event = next((e for e in events.json() if e["status"] == "human_review"), None)
+    human_event = next((e for e in events.json() if e["ai_status"] == "human_review"), None)
     if human_event:
         verify = client.post(
             f"/api/v1/users/{user_id}/properties/{pid}/events/{human_event['id']}/verify",

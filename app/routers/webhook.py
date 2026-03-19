@@ -43,10 +43,11 @@ async def intruder_webhook(
         property_id=payload.property_id,
         person_id=payload.person_id,
         similarity_score=payload.similarity_score,
-        status=event_status,
+        ai_status=event_status,
         snapshot_path=snapshot_path,
         occurred_at=payload.occurred_at or datetime.utcnow(),
         note=payload.note,
+        verified_intruder=event_status.value == "intruder",
     )
     db.add(event)
     db.commit()
@@ -55,9 +56,10 @@ async def intruder_webhook(
     owner_email = property_obj.user.email if property_obj.user else None
     background_tasks.add_task(run_owner_notification_flow_task, event.id, property_obj.id, owner_email)
 
-    if event_status.value == "verified_intruder":
+    if event_status.value == "intruder":
         # Demo escalation placeholder for high-confidence intruder detection.
         event.note = (event.note + " | demo_alarm=true") if event.note else "demo_alarm=true"
+        db.commit()
         db.commit()
 
     return {"event_id": event.id, "status": event.status.value}

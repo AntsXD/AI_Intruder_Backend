@@ -10,8 +10,8 @@ from app.database import Base
 
 
 class EventStatus(str, Enum):
-    VERIFIED_OWNER = "verified_owner"
-    VERIFIED_INTRUDER = "verified_intruder"
+    AUTHORIZED = "authorized"
+    INTRUDER = "intruder"
     HUMAN_REVIEW = "human_review"
 
 
@@ -138,30 +138,17 @@ class Event(Base):
     property_id: Mapped[int] = mapped_column(ForeignKey("properties.id", ondelete="CASCADE"), index=True)
     person_id: Mapped[int | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
     similarity_score: Mapped[float] = mapped_column(Float)
-    status: Mapped[EventStatus] = mapped_column(SqlEnum(EventStatus), index=True)
+    ai_status: Mapped[EventStatus] = mapped_column(SqlEnum(EventStatus), index=True)
     snapshot_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verified_intruder: Mapped[bool] = mapped_column(Boolean, default=False)
+    protocols_activated: Mapped[bool] = mapped_column(Boolean, default=False)
 
     property: Mapped[Property] = relationship("Property", back_populates="events")
-    verifications: Mapped[list[EventVerification]] = relationship(
-        "EventVerification", back_populates="event", cascade="all, delete-orphan"
-    )
     notifications: Mapped[list[NotificationLog]] = relationship(
         "NotificationLog", back_populates="event", cascade="all, delete-orphan"
     )
-
-
-class EventVerification(Base):
-    __tablename__ = "event_verifications"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    confirmed_intruder: Mapped[bool] = mapped_column(Boolean)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    event: Mapped[Event] = relationship("Event", back_populates="verifications")
 
 
 class NotificationLog(Base):

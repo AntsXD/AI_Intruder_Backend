@@ -10,8 +10,8 @@ This backend connects the AI detection service and mobile application for a demo
 - Authentication: Firebase ID token verification + backend-issued JWT access/refresh tokens.
 - AI Integration: secure webhook receives events from AI service.
 - Decision Matrix:
-  - `similarity_score > 70`: `verified_owner`
-  - `similarity_score < 50`: `verified_intruder`
+  - `similarity_score > 70`: `authorized`
+  - `similarity_score < 50`: `intruder`
   - `50 <= similarity_score <= 70`: `human_review`
 - Database: SQLite for demo.
 - Notifications: push (FCM-ready stub), email (SMTP), SMS demo hook (optional), and demo alarm flag for high-confidence intruder.
@@ -180,7 +180,6 @@ If Firebase is not configured, demo token format is accepted:
 - `protocols`
 - `protocol_assignments` (intermediary optimization)
 - `events`
-- `event_verifications`
 - `notification_logs`
 - `camera_streams`
 
@@ -192,7 +191,7 @@ If Firebase is not configured, demo token format is accepted:
 4. Trigger webhook with score:
    - `45` for intruder branch
    - `60` for human review branch
-   - `85` for verified owner branch
+   - `85` for authorized branch
 5. Fetch events and verify a human-review event from owner endpoint.
 6. Show notification logs and event notes.
 7. Configure camera feed and test signed playback URL in browser/app.

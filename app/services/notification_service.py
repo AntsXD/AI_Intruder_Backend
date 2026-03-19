@@ -55,7 +55,7 @@ def send_email_alert(db, event: Event, property_obj: Property, recipient: str | 
 
 def run_owner_notification_flow(db, event: Event, property_obj: Property, owner_email: str | None) -> None:
     send_push_notification_stub(db, event, property_obj)
-    if event.status.value in {"verified_intruder", "human_review"}:
+    if event.ai_status.value in {"intruder", "human_review"}:
         send_email_alert(db, event, property_obj, owner_email)
         send_sms_demo(db, event, property_obj)
 

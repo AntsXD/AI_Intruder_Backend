@@ -116,10 +116,12 @@ class EventOut(BaseModel):
     property_id: int
     person_id: int | None
     similarity_score: float
-    status: str
+    ai_status: str
     snapshot_path: str | None
     occurred_at: datetime
     note: str | None
+    verified_intruder: bool
+    protocols_activated: bool
 
     model_config = {"from_attributes": True}
 
@@ -165,4 +167,4 @@ class PersonActivationResponse(BaseModel):
     message: str
 
 
-EventFilterStatus = Literal["verified_owner", "verified_intruder", "human_review"]
+EventFilterStatus = Literal["authorized", "intruder", "human_review"]

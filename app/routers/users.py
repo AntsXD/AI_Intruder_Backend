@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from app.dependencies import ensure_user_scope, get_current_user, get_db_session
-from app.models import Event, EventVerification, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent
+from app.models import Event, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent
 from app.models.entities import EventStatus
 from app.schemas.schemas import (
     ConsentRequest,
@@ -521,10 +521,10 @@ def verify_event(
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
 
-    if event.status != EventStatus.HUMAN_REVIEW:
+    if event.ai_status != EventStatus.HUMAN_REVIEW:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only human_review events can be verified")
 
-    db.add(EventVerification(event_id=eid, user_id=user_id, confirmed_intruder=payload.confirmed_intruder))
+    event.verified_intruder = payload.confirmed_intruder
     event.note = "Owner confirmed intruder" if payload.confirmed_intruder else "Owner dismissed event"
     db.commit()
     return {"message": "Event verification recorded"}
