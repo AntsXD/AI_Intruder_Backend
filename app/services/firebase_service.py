@@ -26,7 +26,9 @@ def init_firebase() -> None:
 
     if _firebase_initialized:
         return
-
+    print(">>> Attempting Firebase init...")
+    print(f">>> firebase_available: {_firebase_available}")
+    print(f">>> credentials_path: {settings.firebase_credentials_path}")
     if not _firebase_available:
         logger.error("Firebase package not installed.")
         return
@@ -36,6 +38,10 @@ def init_firebase() -> None:
         return
 
     try:
+        import os
+        if not os.path.exists(settings.firebase_credentials_path):
+            print(f">>> FAILED: file does not exist at {settings.firebase_credentials_path}")
+            return
         cred = credentials.Certificate(settings.firebase_credentials_path)
         firebase_admin.initialize_app(cred)
         _firebase_initialized = True

@@ -26,6 +26,10 @@ class Settings(BaseSettings):
 
     firebase_credentials_path: str = ""
     environment: str = "development"
+    # Test only
+    firebase_test_email: str = ""
+    firebase_test_password: str = ""
+    firebase_web_api_key: str = ""
     fcm_enabled: bool = False
     smtp_enabled: bool = False
     smtp_host: str = "smtp.gmail.com"
