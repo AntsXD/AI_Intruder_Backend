@@ -1,14 +1,17 @@
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+load_dotenv()
 
 class Settings(BaseSettings):
     app_name: str = "Intruder Detection Backend"
     env: str = "dev"
     api_prefix: str = "/api/v1"
 
-    jwt_secret_key: str = "change-me"
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY")
     jwt_algorithm: str = "HS256"
     jwt_access_token_minutes: int = 30
     jwt_refresh_token_days: int = 7
@@ -22,7 +25,7 @@ class Settings(BaseSettings):
     webhook_signature_tolerance_seconds: int = 300
 
     firebase_credentials_path: str = ""
-
+    environment: str = "development"
     fcm_enabled: bool = False
     smtp_enabled: bool = False
     smtp_host: str = "smtp.gmail.com"

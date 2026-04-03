@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,12 +15,18 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/verify-token", response_model=TokenResponse)
 def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_session)) -> TokenResponse:
     identity = verify_firebase_token(payload.firebase_token)
+    # Guard :reject identity with no email before touching the database
+    if not identity.get("email"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An email address is required to use this app."
+        )
 
     user = db.scalar(select(User).where(User.firebase_uid == identity["uid"]))
     if not user:
         user = User(
             firebase_uid=identity["uid"],
-            email=identity.get("email") or f"{identity['uid']}@example.local",
+            email=identity.get("email"),
             full_name=identity.get("name") or "Unknown User",
         )
         db.add(user)
@@ -33,7 +40,13 @@ def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_sessi
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(payload: RefreshTokenRequest) -> TokenResponse:
-    user_id = decode_refresh_token(payload.refresh_token)
-    token = create_access_token(user_id)
-    refresh_token = create_refresh_token(user_id)
-    return TokenResponse(access_token=token, refresh_token=refresh_token)
+    try:
+        user_id = decode_refresh_token(payload.refresh_token)
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
+    new_access_token = create_access_token(user_id)
+    new_refresh_token = create_refresh_token(user_id)
+    return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token)
