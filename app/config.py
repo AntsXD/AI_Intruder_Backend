@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY")
     jwt_algorithm: str = "HS256"
-    jwt_access_token_minutes: int = 30
+    jwt_access_token_minutes: int = 60
     jwt_refresh_token_days: int = 7
     stream_token_minutes: int = 10
 
@@ -38,8 +38,9 @@ class Settings(BaseSettings):
     smtp_app_password: str = ""
     smtp_from: str = ""
 
-    sms_enabled: bool = False
-    sms_demo_target: str = ""
+    telegram_enabled: bool = False
+    telegram_bot_token: str = ""
+    telegram_fake_chat_id: str = ""
 
     cors_origins: str = "http://localhost:3000"
     auto_create_tables: bool = True
