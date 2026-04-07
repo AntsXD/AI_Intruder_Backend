@@ -20,18 +20,6 @@ export interface RefreshTokenRequest {
   refresh_token: string;
 }
 
-export interface SignUpRequest {
-  email: string;
-  password: string;
-  fullName: string;
-  phoneNumber?: string;
-}
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
 export interface ConsentRequest {
   consent_type?: string;
   accepted?: boolean;
@@ -236,14 +224,6 @@ export class ApiClient {
     return this.jsonRequest<TokenResponse>("POST", "/api/v1/auth/refresh", payload);
   }
 
-  signUp(_payload: SignUpRequest): Promise<TokenResponse> {
-    return Promise.reject(new Error("signUp is not implemented yet. Add the backend endpoint first, then wire this client method."));
-  }
-
-  login(_payload: LoginRequest): Promise<TokenResponse> {
-    return Promise.reject(new Error("login is not implemented yet. Add the backend endpoint first, then wire this client method."));
-  }
-
   getUser(userId: number): Promise<UserOut> {
     return this.request<UserOut>(`/api/v1/users/${userId}`);
   }
@@ -339,8 +319,8 @@ export class ApiClient {
     return this.request<EventOut>(`/api/v1/users/${userId}/properties/${propertyId}/events/${eventId}`);
   }
 
-  verifyEvent(userId: number, propertyId: number, eventId: number, payload: VerifyEventRequest): Promise<EventOut> {
-    return this.jsonRequest<EventOut>("POST", `/api/v1/users/${userId}/properties/${propertyId}/events/${eventId}/verify`, payload);
+  verifyEvent(userId: number, propertyId: number, eventId: number, payload: VerifyEventRequest): Promise<MessageResponse> {
+    return this.jsonRequest<MessageResponse>("POST", `/api/v1/users/${userId}/properties/${propertyId}/events/${eventId}/verify`, payload);
   }
 
   upsertCameraFeed(userId: number, propertyId: number, payload: CameraFeedUpsertRequest): Promise<CameraFeedOut> {
