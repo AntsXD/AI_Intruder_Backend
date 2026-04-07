@@ -28,13 +28,14 @@ Response body:
 
 ```json
 {
+  "user_id": 1,
   "access_token": "<backend-access-token>",
   "refresh_token": "<backend-refresh-token>",
   "token_type": "bearer"
 }
 ```
 
-Use `access_token` for all protected backend requests.
+Use `user_id` for user-scoped endpoints and `access_token` for all protected backend requests.
 
 ## 3) Fetch user profile
 

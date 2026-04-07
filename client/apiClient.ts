@@ -7,6 +7,7 @@ export interface ClientOptions {
 }
 
 export interface TokenResponse {
+  user_id: number;
   access_token: string;
   refresh_token: string;
   token_type: string;

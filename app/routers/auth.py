@@ -47,7 +47,7 @@ def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_sessi
 
     token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
-    return TokenResponse(access_token=token, refresh_token=refresh_token)
+    return TokenResponse(user_id=user.id, access_token=token, refresh_token=refresh_token)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -67,4 +67,4 @@ def refresh_token(payload: RefreshTokenRequest, db: Session = Depends(get_db_ses
         )
     new_access_token = create_access_token(user_id)
     new_refresh_token = create_refresh_token(user_id)
-    return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token)
+    return TokenResponse(user_id=user.id, access_token=new_access_token, refresh_token=new_refresh_token)
