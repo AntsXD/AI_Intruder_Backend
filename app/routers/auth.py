@@ -32,6 +32,18 @@ def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_sessi
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        updated = False
+        # Keep backend profile in sync with Firebase identity claims.
+        if identity.get("email") and user.email != identity["email"]:
+            user.email = identity["email"]
+            updated = True
+        if identity.get("name") and user.full_name != identity["name"]:
+            user.full_name = identity["name"]
+            updated = True
+        if updated:
+            db.commit()
+            db.refresh(user)
 
     token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
@@ -39,13 +51,19 @@ def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_sessi
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_token(payload: RefreshTokenRequest) -> TokenResponse:
+def refresh_token(payload: RefreshTokenRequest, db: Session = Depends(get_db_session)) -> TokenResponse:
     try:
         user_id = decode_refresh_token(payload.refresh_token)
     except HTTPException:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token"
+        )
+    user = db.get(User, int(user_id)) if user_id.isdigit() else None
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found for refresh token",
         )
     new_access_token = create_access_token(user_id)
     new_refresh_token = create_refresh_token(user_id)

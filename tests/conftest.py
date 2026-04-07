@@ -29,6 +29,8 @@ def webhook_headers() -> dict[str, str]:
 
 @pytest.fixture
 def make_auth_headers(client: TestClient):
+    settings.firebase_allow_demo_tokens = True
+
     def _make(uid: str = "demo-user") -> tuple[int, dict[str, str]]:
         response = client.post(
             "/api/v1/auth/verify-token",

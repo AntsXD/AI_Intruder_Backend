@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     env: str = "dev"
     api_prefix: str = "/api/v1"
 
-    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY")
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY") or "demo-insecure-secret-change-me"
     jwt_algorithm: str = "HS256"
     jwt_access_token_minutes: int = 30
     jwt_refresh_token_days: int = 7
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     webhook_signature_tolerance_seconds: int = 300
 
     firebase_credentials_path: str = ""
+    firebase_allow_demo_tokens: bool = False
     environment: str = "development"
     fcm_enabled: bool = False
     smtp_enabled: bool = False

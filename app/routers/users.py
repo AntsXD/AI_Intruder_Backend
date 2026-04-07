@@ -471,7 +471,7 @@ def list_events(
             parsed_status = EventStatus(status_filter)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status_filter") from exc
-        query = query.where(Event.status == parsed_status)
+        query = query.where(Event.ai_status == parsed_status)
     rows = db.scalars(query.order_by(Event.id.desc()).limit(limit).offset(offset)).all()
     return list(rows)
 

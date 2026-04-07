@@ -45,6 +45,12 @@ def init_firebase() -> None:
 
 
 def verify_firebase_token(firebase_token: str) -> dict[str, Any]:
+    if settings.firebase_allow_demo_tokens and firebase_token.startswith("demo:"):
+        parts = firebase_token.split(":", 3)
+        if len(parts) == 4:
+            _, uid, email, name = parts
+            return {"uid": uid, "email": email or None, "name": name or None}
+
     init_firebase()
 
     if not _firebase_initialized or auth is None:

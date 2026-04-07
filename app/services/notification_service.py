@@ -14,7 +14,7 @@ def log_notification(db, event: Event, channel: NotificationChannel, status: Not
 
 
 def send_push_notification_stub(db, event: Event, property_obj: Property) -> None:
-    detail = f"FCM demo: Event {event.id} status={event.status.value} at property={property_obj.name}"
+    detail = f"FCM demo: Event {event.id} status={event.ai_status.value} at property={property_obj.name}"
     log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.SENT, detail)
 
 
@@ -34,7 +34,7 @@ def send_email_alert(db, event: Event, property_obj: Property, recipient: str | 
         f"Event ID: {event.id}\n"
         f"Property: {property_obj.name}\n"
         f"Score: {event.similarity_score}\n"
-        f"Status: {event.status.value}\n"
+        f"Status: {event.ai_status.value}\n"
     )
 
     msg = MIMEMultipart()
