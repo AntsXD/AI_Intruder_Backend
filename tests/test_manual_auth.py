@@ -1,6 +1,7 @@
 import requests
+from app.config import settings
 
-WEB_API_KEY   = "AIzaSyBYgMbUwqKASWRgBDhIcLW2xvgIbxwjsmo"
+WEB_API_KEY = settings.firebase_web_api_key
 TEST_EMAIL    = "test@test.com"
 TEST_PASSWORD = "Test1234@"
 
