@@ -22,7 +22,12 @@ def test_webhook_threshold_branches(client, webhook_headers, make_auth_headers, 
 
     hook = client.post(
         "/api/v1/webhooks/intruder",
-        json={"property_id": pid, "similarity_score": score, "note": "threshold test"},
+        json={
+            "property_id": pid,
+            "similarity_score": score,
+            "snapshot_base64": "dGVzdA==",
+            "note": "threshold test",
+        },
         headers=webhook_headers,
     )
     assert hook.status_code == 200
