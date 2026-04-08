@@ -18,7 +18,7 @@ class EventStatus(str, Enum):
 class NotificationChannel(str, Enum):
     PUSH = "push"
     EMAIL = "email"
-    SMS = "sms"
+    TELEGRAM = "telegram"
 
 
 class NotificationStatus(str, Enum):
@@ -43,19 +43,20 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     properties: Mapped[list[Property]] = relationship("Property", back_populates="user", cascade="all, delete-orphan")
-    consents: Mapped[list[UserConsent]] = relationship("UserConsent", back_populates="user", cascade="all, delete-orphan")
+    consents: Mapped[list[UserConsent]] = relationship("UserConsent", back_populates="user", cascade="save-update, merge", passive_deletes=True)
 
 
 class UserConsent(Base):
     __tablename__ = "user_consents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     consent_type: Mapped[str] = mapped_column(String(100), default="privacy_policy")
     accepted: Mapped[bool] = mapped_column(Boolean, default=True)
     accepted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    user: Mapped[User] = relationship("User", back_populates="consents")
+    user: Mapped[User | None] = relationship("User", back_populates="consents")
 
 
 class Property(Base):

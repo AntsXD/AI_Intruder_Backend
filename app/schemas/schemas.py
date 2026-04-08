@@ -17,6 +17,7 @@ class RefreshTokenRequest(BaseModel):
 
 class VerifyTokenRequest(BaseModel):
     firebase_token: str = Field(min_length=10)
+    consent_accepted: bool = False
 
 
 class ConsentRequest(BaseModel):

@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.orm import Session
 from pathlib import Path
 
@@ -8,7 +10,6 @@ from app.dependencies import ensure_user_scope, get_current_user, get_db_session
 from app.models import Event, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent
 from app.models.entities import EventStatus
 from app.schemas.schemas import (
-    ConsentRequest,
     EventOut,
     PersonActivationResponse,
     PersonCreate,
@@ -25,6 +26,7 @@ from app.schemas.schemas import (
 )
 from app.config import settings
 from app.services.file_service import remove_dir_if_exists, remove_file_if_exists, save_person_photo, to_storage_relative
+from app.services.notification_service import run_owner_intruder_confirmation_task
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -78,6 +80,15 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    # Anonymize consent records before deleting user
+    db.execute(
+        update(UserConsent)
+        .where(UserConsent.user_id == user_id)
+        .values(user_id=None, revoked_at=datetime.now(timezone.utc))
+        .execution_options(synchronize_session=False)
+    )
+    db.flush()
+
     # GDPR-friendly cleanup for filesystem artifacts owned by this user.
     for property_obj in user.properties:
         for person in property_obj.persons:
@@ -92,18 +103,6 @@ def delete_user(
     db.commit()
     return {"message": "User and associated data deleted"}
 
-
-@router.post("/{user_id}/consent")
-def add_consent(
-    user_id: int,
-    payload: ConsentRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db_session),
-) -> dict[str, str]:
-    ensure_user_scope(user_id, current_user)
-    db.add(UserConsent(user_id=user_id, consent_type=payload.consent_type, accepted=payload.accepted))
-    db.commit()
-    return {"message": "Consent recorded"}
 
 
 @router.get("/{user_id}/properties", response_model=list[PropertyOut])
@@ -497,12 +496,13 @@ def verify_event(
     user_id: int,
     pid: int,
     eid: int,
+    background_tasks: BackgroundTasks,
     payload: VerifyEventRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ) -> dict[str, str]:
     ensure_user_scope(user_id, current_user)
-    _get_property_for_user(db, user_id, pid)
+    property_obj = _get_property_for_user(db, user_id, pid)
     event = db.scalar(select(Event).where(and_(Event.id == eid, Event.property_id == pid)))
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
@@ -513,4 +513,6 @@ def verify_event(
     event.verified_intruder = payload.confirmed_intruder
     event.note = "Owner confirmed intruder" if payload.confirmed_intruder else "Owner dismissed event"
     db.commit()
+    if payload.confirmed_intruder:
+        background_tasks.add_task(run_owner_intruder_confirmation_task, event.id, property_obj.id)
     return {"message": "Event verification recorded"}
