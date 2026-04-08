@@ -124,6 +124,9 @@ def create_property(
     db: Session = Depends(get_db_session),
 ) -> PropertyOut:
     ensure_user_scope(user_id, current_user)
+    existing = db.scalar(select(Property).where(and_(Property.user_id == user_id, Property.name == payload.name)))
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A property with this name already exists.")
     property_obj = Property(user_id=user_id, name=payload.name, address=payload.address)
     db.add(property_obj)
     db.commit()
