@@ -292,10 +292,8 @@ def activate_person(
 
     photo_count = db.scalar(select(func.count(PersonPhoto.id)).where(PersonPhoto.person_id == person_id)) or 0
 
-    if photo_count < 3:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least 3 photos are required")
-    if photo_count > 5:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Maximum 5 photos allowed")
+    if photo_count != 3:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exactly 3 photos are required")
 
     person.is_active = True
     db.commit()
@@ -326,8 +324,8 @@ async def upload_person_photo(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
 
     count = db.scalar(select(func.count(PersonPhoto.id)).where(PersonPhoto.person_id == person_id))
-    if count is not None and count >= 5:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A person can only have up to 5 photos")
+    if count is not None and count >= 3:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A person can only have up to 3 photos")
 
     path = await save_person_photo(user_id, pid, person_id, file)
     if is_display:
