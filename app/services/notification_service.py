@@ -1,6 +1,9 @@
+import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import select
 
@@ -18,8 +21,7 @@ def log_notification(db, event: Event, channel: NotificationChannel, status: Not
 
 def send_push_notification(db, event: Event, property_obj: Property) -> None:
     if not settings.fcm_enabled:
-        detail = f"FCM disabled: Event {event.id} status={event.ai_status.value} at property={property_obj.name}"
-        log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.SENT, detail)
+        logger.debug("FCM disabled — skipping push for event %s", event.id)
         return
 
     owner_id = property_obj.user_id
@@ -42,7 +44,8 @@ def send_push_notification(db, event: Event, property_obj: Property) -> None:
         try:
             send_fcm_notification(token=token, title=title, body=body, data=data)
             success += 1
-        except Exception:
+        except Exception as exc:
+            logger.warning("FCM send failed for token %r: %s", token, exc)
             failed += 1
 
     if success > 0:
