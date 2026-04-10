@@ -31,6 +31,15 @@ export interface UserUpdateRequest {
   phone_number?: string;
 }
 
+export interface DeviceTokenUpsertRequest {
+  token: string;
+  device_name?: string | null;
+}
+
+export interface DeviceTokenDeleteRequest {
+  token: string;
+}
+
 export interface PropertyCreateRequest {
   name: string;
   address?: string | null;
@@ -231,6 +240,14 @@ export class ApiClient {
 
   updateUser(userId: number, payload: UserUpdateRequest): Promise<UserOut> {
     return this.jsonRequest<UserOut>("PUT", `/api/v1/users/${userId}`, payload);
+  }
+
+  upsertFcmToken(userId: number, payload: DeviceTokenUpsertRequest): Promise<MessageResponse> {
+    return this.jsonRequest<MessageResponse>("POST", `/api/v1/users/${userId}/devices/fcm-token`, payload);
+  }
+
+  deleteFcmToken(userId: number, payload: DeviceTokenDeleteRequest): Promise<MessageResponse> {
+    return this.jsonRequest<MessageResponse>("DELETE", `/api/v1/users/${userId}/devices/fcm-token`, payload);
   }
 
   deleteUser(userId: number): Promise<MessageResponse> {

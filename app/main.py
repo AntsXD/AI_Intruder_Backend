@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
+from app.init_db import ensure_sqlite_schema_compatibility
 from app.routers.auth import router as auth_router
 from app.routers.health import router as health_router
 from app.routers.streams import router as streams_router
@@ -19,6 +20,7 @@ from app import models  # noqa: F401
 async def lifespan(_: FastAPI):
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
+        ensure_sqlite_schema_compatibility()
     yield
 
 

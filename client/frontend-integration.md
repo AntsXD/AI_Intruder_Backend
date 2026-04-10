@@ -65,6 +65,16 @@ Request body:
 - Record consent: `POST /api/v1/users/{user_id}/consent`
 - Create property: `POST /api/v1/users/{user_id}/properties`
 - Create recognized person profile: `POST /api/v1/users/{user_id}/properties/{pid}/persons`
+- Register device for push notifications: `POST /api/v1/users/{user_id}/devices/fcm-token`
+
+Push token request body:
+
+```json
+{
+  "token": "<fcm-device-token>",
+  "device_name": "Ants iPhone"
+}
+```
 
 ## 6) Refresh backend token when expired
 
