@@ -37,6 +37,15 @@ class UserUpdate(BaseModel):
     phone_number: str | None = None
 
 
+class DeviceTokenUpsertRequest(BaseModel):
+    token: str = Field(min_length=20)
+    device_name: str | None = None
+
+
+class DeviceTokenDeleteRequest(BaseModel):
+    token: str = Field(min_length=20)
+
+
 class UserOut(BaseModel):
     id: int
     firebase_uid: str

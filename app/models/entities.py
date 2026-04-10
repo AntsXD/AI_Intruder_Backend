@@ -18,6 +18,7 @@ class EventStatus(str, Enum):
 class NotificationChannel(str, Enum):
     PUSH = "push"
     EMAIL = "email"
+    SMS = "sms"
     TELEGRAM = "telegram"
 
 
@@ -44,6 +45,22 @@ class User(Base):
 
     properties: Mapped[list[Property]] = relationship("Property", back_populates="user", cascade="all, delete-orphan")
     consents: Mapped[list[UserConsent]] = relationship("UserConsent", back_populates="user", cascade="save-update, merge", passive_deletes=True)
+    device_tokens: Mapped[list[UserDeviceToken]] = relationship(
+        "UserDeviceToken", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserDeviceToken(Base):
+    __tablename__ = "user_device_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(String(500), unique=True, index=True)
+    device_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped[User] = relationship("User", back_populates="device_tokens")
 
 
 class UserConsent(Base):

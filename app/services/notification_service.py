@@ -2,9 +2,12 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from sqlalchemy import select
+
 from app.config import settings
 from app.database import SessionLocal
-from app.models.entities import Event, NotificationChannel, NotificationLog, NotificationStatus, Property
+from app.models.entities import Event, NotificationChannel, NotificationLog, NotificationStatus, Property, UserDeviceToken
+from app.services.firebase_service import send_fcm_notification
 
 
 def log_notification(db, event: Event, channel: NotificationChannel, status: NotificationStatus, detail: str | None = None) -> None:
@@ -13,9 +16,39 @@ def log_notification(db, event: Event, channel: NotificationChannel, status: Not
     db.commit()
 
 
-def send_push_notification_stub(db, event: Event, property_obj: Property) -> None:
-    detail = f"FCM demo: Event {event.id} status={event.ai_status.value} at property={property_obj.name}"
-    log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.SENT, detail)
+def send_push_notification(db, event: Event, property_obj: Property) -> None:
+    if not settings.fcm_enabled:
+        detail = f"FCM disabled: Event {event.id} status={event.ai_status.value} at property={property_obj.name}"
+        log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.SENT, detail)
+        return
+
+    owner_id = property_obj.user_id
+    tokens = db.scalars(select(UserDeviceToken.token).where(UserDeviceToken.user_id == owner_id)).all()
+    if not tokens:
+        log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.FAILED, "No FCM device tokens registered")
+        return
+
+    title = f"Intruder Alert - {property_obj.name}"
+    body = f"Event {event.id}: {event.ai_status.value} (score={event.similarity_score})"
+    data = {
+        "event_id": str(event.id),
+        "property_id": str(property_obj.id),
+        "status": event.ai_status.value,
+    }
+
+    success = 0
+    failed = 0
+    for token in tokens:
+        try:
+            send_fcm_notification(token=token, title=title, body=body, data=data)
+            success += 1
+        except Exception:
+            failed += 1
+
+    if success > 0:
+        log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.SENT, f"FCM sent to {success} device(s)")
+    if failed > 0:
+        log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.FAILED, f"FCM failed for {failed} device(s)")
 
 
 def send_sms_demo(db, event: Event, property_obj: Property) -> None:
@@ -54,7 +87,7 @@ def send_email_alert(db, event: Event, property_obj: Property, recipient: str | 
 
 
 def run_owner_notification_flow(db, event: Event, property_obj: Property, owner_email: str | None) -> None:
-    send_push_notification_stub(db, event, property_obj)
+    send_push_notification(db, event, property_obj)
     if event.ai_status.value in {"intruder", "human_review"}:
         send_email_alert(db, event, property_obj, owner_email)
         send_sms_demo(db, event, property_obj)

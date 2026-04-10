@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from app.dependencies import ensure_user_scope, get_current_user, get_db_session
-from app.models import Event, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent
+from app.models import Event, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent, UserDeviceToken
 from app.models.entities import EventStatus
 from app.schemas.schemas import (
+    DeviceTokenDeleteRequest,
+    DeviceTokenUpsertRequest,
     EventOut,
     PersonActivationResponse,
     PersonCreate,
@@ -67,6 +69,40 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/{user_id}/devices/fcm-token")
+def upsert_fcm_token(
+    user_id: int,
+    payload: DeviceTokenUpsertRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    row = db.scalar(select(UserDeviceToken).where(UserDeviceToken.token == payload.token))
+    if not row:
+        row = UserDeviceToken(user_id=user_id, token=payload.token, device_name=payload.device_name)
+        db.add(row)
+    else:
+        row.user_id = user_id
+        row.device_name = payload.device_name
+    db.commit()
+    return {"message": "FCM token saved"}
+
+
+@router.delete("/{user_id}/devices/fcm-token")
+def delete_fcm_token(
+    user_id: int,
+    payload: DeviceTokenDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    row = db.scalar(select(UserDeviceToken).where(UserDeviceToken.user_id == user_id, UserDeviceToken.token == payload.token))
+    if row:
+        db.delete(row)
+        db.commit()
+    return {"message": "FCM token removed"}
 
 
 @router.delete("/{user_id}")

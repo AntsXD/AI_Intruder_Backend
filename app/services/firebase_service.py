@@ -9,12 +9,13 @@ logger = logging.getLogger(__name__)
 
 try:
     import firebase_admin
-    from firebase_admin import auth, credentials
+    from firebase_admin import auth, credentials, messaging
     _firebase_available = True
 except ImportError:
     firebase_admin = None
     auth = None
     credentials = None
+    messaging = None
     _firebase_available = False
     logger.warning("firebase-admin is not installed. Run: pip install firebase-admin")
 
@@ -26,9 +27,6 @@ def init_firebase() -> None:
 
     if _firebase_initialized:
         return
-    print(">>> Attempting Firebase init...")
-    print(f">>> firebase_available: {_firebase_available}")
-    print(f">>> credentials_path: {settings.firebase_credentials_path}")
     if not _firebase_available:
         logger.error("Firebase package not installed.")
         return
@@ -40,7 +38,7 @@ def init_firebase() -> None:
     try:
         import os
         if not os.path.exists(settings.firebase_credentials_path):
-            print(f">>> FAILED: file does not exist at {settings.firebase_credentials_path}")
+            logger.error("Firebase credentials file does not exist at configured path.")
             return
         cred = credentials.Certificate(settings.firebase_credentials_path)
         firebase_admin.initialize_app(cred)
@@ -71,6 +69,19 @@ def verify_firebase_token(firebase_token: str) -> dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired Firebase token."
         ) from exc
+
+
+def send_fcm_notification(token: str, title: str, body: str, data: dict[str, str] | None = None) -> str:
+    init_firebase()
+    if not _firebase_initialized or messaging is None:
+        raise RuntimeError("Firebase is not configured for FCM.")
+
+    message = messaging.Message(
+        token=token,
+        notification=messaging.Notification(title=title, body=body),
+        data=data or {},
+    )
+    return messaging.send(message)
 
 
 
