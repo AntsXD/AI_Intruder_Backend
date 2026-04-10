@@ -1,10 +1,16 @@
+import base64
+import logging
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Literal
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.orm import Session
-from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from app.dependencies import ensure_user_scope, get_current_user, get_db_session
 from app.models import Event, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent
@@ -298,6 +304,30 @@ def activate_person(
     person.is_active = True
     db.commit()
 
+    # Notify AI service with base64-encoded photos
+    if settings.ai_service_url:
+        try:
+            photos_payload = []
+            for photo in person.photos:
+                with open(photo.file_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode("utf-8")
+                photos_payload.append({
+                    "type": photo.photo_type or "unknown",
+                    "data": encoded,
+                })
+            with httpx.Client(timeout=10) as client:
+                client.post(
+                    f"{settings.ai_service_url}/persons/register",
+                    json={
+                        "person_id": person.id,
+                        "property_id": pid,
+                        "photos": photos_payload,
+                    },
+                    headers={"X-API-Key": settings.ai_service_api_key},
+                )
+        except Exception as exc:
+            logger.warning("Failed to notify AI service for person %d: %s", person.id, exc)
+
     return PersonActivationResponse(
         person_id=person.id,
         is_active=person.is_active,
@@ -312,6 +342,7 @@ async def upload_person_photo(
     user_id: int,
     pid: int,
     person_id: int,
+    photo_type: Literal["face", "left_profile", "right_profile"],
     is_display: bool = False,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -327,16 +358,25 @@ async def upload_person_photo(
     if count is not None and count >= 3:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A person can only have up to 3 photos")
 
+    # Prevent duplicate photo types
+    existing_type = db.scalar(
+        select(PersonPhoto).where(
+            and_(PersonPhoto.person_id == person_id, PersonPhoto.photo_type == photo_type)
+        )
+    )
+    if existing_type:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A {photo_type} photo already exists for this person")
+
     path = await save_person_photo(user_id, pid, person_id, file)
     if is_display:
         for old in person.photos:
             old.is_display = False
 
-    photo = PersonPhoto(person_id=person_id, file_path=path, is_display=is_display)
+    photo = PersonPhoto(person_id=person_id, file_path=path, photo_type=photo_type, is_display=is_display)
     db.add(photo)
     db.commit()
     db.refresh(photo)
-    return {"photo_id": photo.id, "file_path": to_storage_relative(photo.file_path)}
+    return {"photo_id": photo.id, "file_path": to_storage_relative(photo.file_path), "photo_type": photo.photo_type}
 
 
 @router.get("/{user_id}/properties/{pid}/persons/{person_id}/photos/{photo_id}")

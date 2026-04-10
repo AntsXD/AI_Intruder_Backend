@@ -98,6 +98,7 @@ class PersonPhoto(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     person_id: Mapped[int] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"), index=True)
     file_path: Mapped[str] = mapped_column(String(500))
+    photo_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # face | left_profile | right_profile
     is_display: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

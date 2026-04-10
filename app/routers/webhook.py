@@ -11,7 +11,7 @@ from app.services.decision_service import map_similarity_to_status
 from app.services.file_service import save_event_snapshot_from_base64
 from app.services.notification_service import run_owner_notification_flow_task
 
-router = APIRouter(prefix="/webhooks", tags=["webhook"])
+router = APIRouter(prefix="/webhooks", tags=["webhook"]) 
 
 
 @router.post("/intruder")
@@ -45,7 +45,7 @@ async def intruder_webhook(
         snapshot_path=snapshot_path,
         occurred_at=payload.occurred_at or datetime.utcnow(),
         note=payload.note,
-        verified_intruder=event_status.value == "intruder",
+        verified_intruder=False,
     )
     db.add(event)
     db.commit()

@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     auto_create_tables: bool = True
 
+    ai_service_url: str = "http://localhost:8001"
+    ai_service_api_key: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
 
     @property
