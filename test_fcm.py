@@ -28,13 +28,19 @@ SETUP
 """
 
 import json
+import sqlite3
 import sys
 import os
+import time
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Get the directory where this script is located (backend folder)
+SCRIPT_DIR = Path(__file__).parent
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 BASE_URL        = "http://127.0.0.1:8000/api/v1"
@@ -182,32 +188,65 @@ event_status = resp.json()["status"]
 ok(f"Event created: id={event_id}  status={event_status}")
 
 
-# ─── Step 6: Check notification logs ──────────────────────────────────────────
-step("5 / 5  →  Check event & notification result")
+# ─── Step 6: Check notification logs directly from SQLite ─────────────────────
+step("5 / 5  →  Check notification result")
 
-resp = requests.get(
-    f"{BASE_URL}/users/{user_id}/properties/{property_id}/events/{event_id}",
-    headers=headers,
-)
-if resp.status_code != 200:
-    fail("Could not fetch event", resp)
+# The webhook fires notifications in a background task — give it a moment.
+print("  ⏳ Waiting 3 seconds for background notification task…")
+time.sleep(3)
 
-event = resp.json()
-print(f"  Event detail:")
-print(f"    id            : {event['id']}")
-print(f"    ai_status     : {event['ai_status']}")
-print(f"    similarity    : {event['similarity_score']}")
-
-if FCM_TOKEN_REGISTERED:
-    print()
-    print("  Check your server logs for one of:")
-    print("    ✔  'FCM sent to 1 device(s)'  ← notification delivered")
-    print("    ✘  'FCM send failed for token' ← check token / credentials")
+# Parse DATABASE_URL to get the actual database file path
+db_url = os.getenv("DATABASE_URL", "sqlite:///./intruder_demo.db")
+if db_url.startswith("sqlite:///"):
+    db_filename = db_url.replace("sqlite:///", "")
 else:
+    db_filename = "intruder_demo.db"
+
+# Make path absolute, relative to script directory
+DB_PATH = str(SCRIPT_DIR / db_filename)
+
+try:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT channel, status, detail, created_at FROM notification_logs WHERE event_id = ? ORDER BY id",
+        (event_id,),
+    ).fetchall()
+    conn.close()
+except Exception as e:
+    print(f"  ⚠  Could not read notification_logs: {e}")
+    rows = []
+
+if not rows:
+    print(f"  {FAIL} No notification log entries found for event {event_id}.")
+    if not FCM_TOKEN_REGISTERED:
+        print("     FCM token was not registered — no push was attempted.")
+    else:
+        print("     The background task may not have run. Check your server is running.")
+else:
+    print(f"  Found {len(rows)} notification log(s):\n")
+    for r in rows:
+        ch      = r["channel"]
+        st      = r["status"]
+        detail  = r["detail"] or ""
+        emoji   = PASS if st.lower() == "sent" else FAIL
+        print(f"    {emoji}  [{ch.upper():>8}]  {st.upper()}  —  {detail}")
+
+    push_sent = any(r["channel"].lower() == "push" and r["status"].lower() == "sent" for r in rows)
+    push_failed = any(r["channel"].lower() == "push" and r["status"].lower() == "failed" for r in rows)
+
     print()
-    print("  ⚠  FCM token was not registered so no push was attempted.")
-    print("     Set FCM_TEST_TOKEN in your .env and re-run to test actual delivery.")
+    if push_sent:
+        ok("FCM push notification was delivered successfully! 🎉")
+    elif push_failed:
+        print(f"  {FAIL} FCM push failed — check the detail above (likely an invalid token or credentials issue).")
+    elif not FCM_TOKEN_REGISTERED:
+        print("  ⚠  FCM token wasn't registered, so no push was attempted.")
+    else:
+        print("  ⚠  No PUSH log entry found — FCM may be disabled in .env (FCM_ENABLED=false).")
+
 
 print(f"\n{'═'*60}")
 print("  All steps completed.")
 print(f"{'═'*60}\n")
+
