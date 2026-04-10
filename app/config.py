@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     smtp_app_password: str = ""
     smtp_from: str = ""
 
+    sms_enabled: bool = False
+    sms_demo_target: str = ""
+
     telegram_enabled: bool = False
     telegram_bot_token: str = ""
     telegram_fake_chat_id: str = ""
@@ -48,7 +51,12 @@ class Settings(BaseSettings):
     ai_service_url: str = "http://localhost:8001"
     ai_service_api_key: str = ""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     @property
     def cors_origins_list(self) -> list[str]:
