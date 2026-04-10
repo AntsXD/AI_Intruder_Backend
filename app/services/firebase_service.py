@@ -81,7 +81,10 @@ def send_fcm_notification(token: str, title: str, body: str, data: dict[str, str
         notification=messaging.Notification(title=title, body=body),
         data=data or {},
     )
-    return messaging.send(message)
+    result = messaging.send(message)
+    logger.info(f"FCM sent successfully: message_id={result}")
+    return result
+
 
 
 

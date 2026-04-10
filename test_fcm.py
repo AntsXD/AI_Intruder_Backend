@@ -38,7 +38,7 @@ load_dotenv()
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 BASE_URL        = "http://127.0.0.1:8000/api/v1"
-WEBHOOK_API_KEY = os.getenv("WEBHOOK_API_KEY", "change-me")
+WEBHOOK_API_KEY = os.getenv("WEBHOOK_API_KEY", "CHANGE_ME_WEBHOOK_KEY")
 
 # Firebase credentials for getting a real ID token
 FIREBASE_WEB_API_KEY = os.getenv("FIREBASE_WEB_API_KEY", "")
@@ -166,7 +166,7 @@ step("4b / 5  →  Trigger intruder webhook (similarity=0.1 → intruder)")
 
 resp = requests.post(
     f"{BASE_URL}/webhooks/intruder",
-    headers={"x-api-key": WEBHOOK_API_KEY},
+    headers={"x-webhook-api-key": WEBHOOK_API_KEY},
     json={
         "property_id": property_id,
         "similarity_score": 0.1,          # low score → intruder

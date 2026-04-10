@@ -27,9 +27,12 @@ def send_push_notification(db, event: Event, property_obj: Property) -> None:
     owner_id = property_obj.user_id
     tokens = db.scalars(select(UserDeviceToken.token).where(UserDeviceToken.user_id == owner_id)).all()
     if not tokens:
+        logger.warning("No FCM device tokens registered for user %s", owner_id)
         log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.FAILED, "No FCM device tokens registered")
         return
 
+    logger.info("Sending FCM notification to %d device(s) for event %s", len(tokens), event.id)
+    
     title = f"Intruder Alert - {property_obj.name}"
     body = f"Event {event.id}: {event.ai_status.value} (score={event.similarity_score})"
     data = {
@@ -49,9 +52,12 @@ def send_push_notification(db, event: Event, property_obj: Property) -> None:
             failed += 1
 
     if success > 0:
+        logger.info("FCM sent to %d device(s)", success)
         log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.SENT, f"FCM sent to {success} device(s)")
     if failed > 0:
+        logger.warning("FCM failed for %d device(s)", failed)
         log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.FAILED, f"FCM failed for {failed} device(s)")
+
 
 
 def send_sms_demo(db, event: Event, property_obj: Property) -> None:
