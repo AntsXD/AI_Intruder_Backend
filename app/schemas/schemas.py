@@ -130,6 +130,11 @@ class EventOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EventDetailOut(EventOut):
+    snapshot_base64: str
+    snapshot_mime_type: str = "image/jpeg"
+
+
 class VerifyEventRequest(BaseModel):
     confirmed_intruder: bool
 

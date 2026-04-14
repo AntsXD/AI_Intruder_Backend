@@ -18,6 +18,7 @@ from app.models.entities import EventStatus
 from app.schemas.schemas import (
     DeviceTokenDeleteRequest,
     DeviceTokenUpsertRequest,
+    EventDetailOut,
     EventOut,
     PersonActivationResponse,
     PersonCreate,
@@ -552,20 +553,46 @@ def list_events(
     return list(rows)
 
 
-@router.get("/{user_id}/properties/{pid}/events/{eid}", response_model=EventOut)
+@router.get("/{user_id}/properties/{pid}/events/{eid}", response_model=EventDetailOut)
 def get_event(
     user_id: int,
     pid: int,
     eid: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db_session),
-) -> EventOut:
+) -> EventDetailOut:
     ensure_user_scope(user_id, current_user)
     _get_property_for_user(db, user_id, pid)
     event = db.scalar(select(Event).where(and_(Event.id == eid, Event.property_id == pid)))
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-    return event
+
+    if not event.snapshot_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot path missing")
+
+    snapshot_file = Path(event.snapshot_path)
+    if not snapshot_file.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot file not found on disk")
+
+    with open(snapshot_file, "rb") as f:
+        snapshot_base64 = base64.b64encode(f.read()).decode("utf-8")
+
+    return EventDetailOut(
+        id=event.id,
+        property_id=event.property_id,
+        person_id=event.person_id,
+        similarity_score=event.similarity_score,
+        ai_status=event.ai_status.value,
+        snapshot_path=event.snapshot_path,
+        occurred_at=event.occurred_at,
+        note=event.note,
+        verified_intruder=event.verified_intruder,
+        protocols_activated=event.protocols_activated,
+        distance_meters=event.distance_meters,
+        dwell_time_seconds=event.dwell_time_seconds,
+        expires_at=event.expires_at,
+        snapshot_base64=snapshot_base64,
+    )
 
 
 @router.post("/{user_id}/properties/{pid}/events/{eid}/verify")

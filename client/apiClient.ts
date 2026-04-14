@@ -117,6 +117,11 @@ export interface EventOut {
   expires_at: string;
 }
 
+export interface EventDetailOut extends EventOut {
+  snapshot_base64: string;
+  snapshot_mime_type: string;
+}
+
 export interface CameraFeedOut {
   property_id: number;
   source_url: string;
@@ -333,8 +338,8 @@ export class ApiClient {
     );
   }
 
-  getEvent(userId: number, propertyId: number, eventId: number): Promise<EventOut> {
-    return this.request<EventOut>(`/api/v1/users/${userId}/properties/${propertyId}/events/${eventId}`);
+  getEvent(userId: number, propertyId: number, eventId: number): Promise<EventDetailOut> {
+    return this.request<EventDetailOut>(`/api/v1/users/${userId}/properties/${propertyId}/events/${eventId}`);
   }
 
   verifyEvent(userId: number, propertyId: number, eventId: number, payload: VerifyEventRequest): Promise<MessageResponse> {
