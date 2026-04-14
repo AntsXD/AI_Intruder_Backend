@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models.entities import Event, NotificationChannel, NotificationLog, NotificationStatus, Property, UserDeviceToken
+from app.models.entities import Event, EventStatus, NotificationChannel, NotificationLog, NotificationStatus, Person, Property, UserDeviceToken
 from app.services.firebase_service import send_fcm_notification
 
 
@@ -19,7 +19,30 @@ def log_notification(db, event: Event, channel: NotificationChannel, status: Not
     db.commit()
 
 
-def send_push_notification(db, event: Event, property_obj: Property) -> None:
+def _build_push_content(event: Event, property_name: str, person_name: str | None) -> tuple[str, str, str]:
+    if event.ai_status == EventStatus.AUTHORIZED:
+        label = person_name or "Known person"
+        return (
+            f"Known Person Detected - {property_name}",
+            f"{label} recognized at {property_name} (event {event.id}, score={event.similarity_score:.1f}).",
+            "known_person",
+        )
+
+    if event.ai_status == EventStatus.HUMAN_REVIEW:
+        return (
+            f"Unknown Person Detected - {property_name}",
+            f"Unknown visitor needs review at {property_name} (event {event.id}, score={event.similarity_score:.1f}).",
+            "unknown_person",
+        )
+
+    return (
+        f"Intruder Alert - {property_name}",
+        f"Intruder detected at {property_name} (event {event.id}, score={event.similarity_score:.1f}).",
+        "intruder",
+    )
+
+
+def send_push_notification(db, event: Event, property_obj: Property, person_name: str | None = None) -> None:
     if not settings.fcm_enabled:
         logger.debug("FCM disabled — skipping push for event %s", event.id)
         return
@@ -33,13 +56,22 @@ def send_push_notification(db, event: Event, property_obj: Property) -> None:
 
     logger.info("Sending FCM notification to %d device(s) for event %s", len(tokens), event.id)
     
-    title = f"Intruder Alert - {property_obj.name}"
-    body = f"Event {event.id}: {event.ai_status.value} (score={event.similarity_score})"
+    resolved_person_name = person_name
+    if not resolved_person_name and event.person_id:
+        person = db.get(Person, event.person_id)
+        if person:
+            resolved_person_name = person.name
+
+    title, body, alert_level = _build_push_content(event, property_obj.name, resolved_person_name)
     data = {
         "event_id": str(event.id),
         "property_id": str(property_obj.id),
         "status": event.ai_status.value,
+        "alert_level": alert_level,
+        "similarity_score": f"{event.similarity_score:.1f}",
     }
+    if resolved_person_name:
+        data["person_name"] = resolved_person_name
 
     success = 0
     failed = 0
@@ -95,21 +127,32 @@ def send_email_alert(db, event: Event, property_obj: Property, recipient: str | 
         log_notification(db, event, NotificationChannel.EMAIL, NotificationStatus.FAILED, str(exc))
 
 
-def run_owner_notification_flow(db, event: Event, property_obj: Property, owner_email: str | None) -> None:
-    send_push_notification(db, event, property_obj)
+def run_owner_notification_flow(
+    db,
+    event: Event,
+    property_obj: Property,
+    owner_email: str | None,
+    person_name: str | None = None,
+) -> None:
+    send_push_notification(db, event, property_obj, person_name)
     if event.ai_status.value in {"intruder", "human_review"}:
         send_email_alert(db, event, property_obj, owner_email)
         send_sms_demo(db, event, property_obj)
 
 
-def run_owner_notification_flow_task(event_id: int, property_id: int, owner_email: str | None) -> None:
+def run_owner_notification_flow_task(
+    event_id: int,
+    property_id: int,
+    owner_email: str | None,
+    person_name: str | None = None,
+) -> None:
     db = SessionLocal()
     try:
         event = db.get(Event, event_id)
         property_obj = db.get(Property, property_id)
         if not event or not property_obj:
             return
-        run_owner_notification_flow(db, event, property_obj, owner_email)
+        run_owner_notification_flow(db, event, property_obj, owner_email, person_name)
     finally:
         db.close()
 

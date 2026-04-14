@@ -143,6 +143,7 @@ class IntruderWebhookRequest(BaseModel):
     property_id: int
     similarity_score: float = Field(ge=0, le=100)
     person_id: int | None = None
+    person_name: str | None = None
     snapshot_base64: str
     occurred_at: datetime | None = None
     note: str | None = None
