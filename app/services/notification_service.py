@@ -42,6 +42,50 @@ def _build_push_content(event: Event, property_name: str, person_name: str | Non
     )
 
 
+def _build_email_content(event: Event, property_name: str, person_name: str | None) -> tuple[str, str]:
+    if event.ai_status == EventStatus.AUTHORIZED:
+        label = person_name or "Known person"
+        subject = f"Known Person Update - {property_name}"
+        body = (
+            f"Event ID: {event.id}\n"
+            f"Property: {property_name}\n"
+            f"Status: known_person\n"
+            f"Person: {label}\n"
+            f"Score: {event.similarity_score:.1f}\n"
+        )
+        return subject, body
+
+    if event.ai_status == EventStatus.HUMAN_REVIEW:
+        subject = f"Unknown Person Review Needed - {property_name}"
+        body = (
+            f"Event ID: {event.id}\n"
+            f"Property: {property_name}\n"
+            f"Status: unknown_person\n"
+            f"Score: {event.similarity_score:.1f}\n"
+            "Action: Please review this event in the app.\n"
+        )
+        return subject, body
+
+    subject = f"Intruder Alert - {property_name}"
+    body = (
+        f"Event ID: {event.id}\n"
+        f"Property: {property_name}\n"
+        "Status: intruder\n"
+        f"Score: {event.similarity_score:.1f}\n"
+        "Action: Please review immediately in the app.\n"
+    )
+    return subject, body
+
+
+def _build_sms_detail(event: Event, property_name: str, person_name: str | None) -> str:
+    if event.ai_status == EventStatus.AUTHORIZED:
+        label = person_name or "known person"
+        return f"SMS demo: known_person {label} at {property_name} (event {event.id})"
+    if event.ai_status == EventStatus.HUMAN_REVIEW:
+        return f"SMS demo: unknown_person at {property_name} (event {event.id})"
+    return f"SMS demo: intruder at {property_name} (event {event.id})"
+
+
 def send_push_notification(db, event: Event, property_obj: Property, person_name: str | None = None) -> None:
     if not settings.fcm_enabled:
         logger.debug("FCM disabled — skipping push for event %s", event.id)
@@ -92,24 +136,18 @@ def send_push_notification(db, event: Event, property_obj: Property, person_name
 
 
 
-def send_sms_demo(db, event: Event, property_obj: Property) -> None:
+def send_sms_demo(db, event: Event, property_obj: Property, person_name: str | None = None) -> None:
     if not settings.sms_enabled:
         return
-    detail = f"SMS demo alert for property {property_obj.name}, event {event.id}"
+    detail = _build_sms_detail(event, property_obj.name, person_name)
     log_notification(db, event, NotificationChannel.SMS, NotificationStatus.SENT, detail)
 
 
-def send_email_alert(db, event: Event, property_obj: Property, recipient: str | None) -> None:
+def send_email_alert(db, event: Event, property_obj: Property, recipient: str | None, person_name: str | None = None) -> None:
     if not settings.smtp_enabled or not recipient:
         return
 
-    subject = f"Intruder Alert - {property_obj.name}"
-    body = (
-        f"Event ID: {event.id}\n"
-        f"Property: {property_obj.name}\n"
-        f"Score: {event.similarity_score}\n"
-        f"Status: {event.ai_status.value}\n"
-    )
+    subject, body = _build_email_content(event, property_obj.name, person_name)
 
     msg = MIMEMultipart()
     msg["From"] = settings.smtp_from or settings.smtp_username
@@ -135,9 +173,8 @@ def run_owner_notification_flow(
     person_name: str | None = None,
 ) -> None:
     send_push_notification(db, event, property_obj, person_name)
-    if event.ai_status.value in {"intruder", "human_review"}:
-        send_email_alert(db, event, property_obj, owner_email)
-        send_sms_demo(db, event, property_obj)
+    send_email_alert(db, event, property_obj, owner_email, person_name)
+    send_sms_demo(db, event, property_obj, person_name)
 
 
 def run_owner_notification_flow_task(
