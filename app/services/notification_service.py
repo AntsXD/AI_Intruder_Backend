@@ -1,4 +1,7 @@
 import smtplib
+import json
+import urllib.error
+import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -18,11 +21,49 @@ def send_push_notification_stub(db, event: Event, property_obj: Property) -> Non
     log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.SENT, detail)
 
 
-def send_sms_demo(db, event: Event, property_obj: Property) -> None:
-    if not settings.sms_enabled:
+def send_telegram_alert(db, event: Event, property_obj: Property, chat_id: str | None) -> None:
+    if not settings.telegram_enabled:
         return
-    detail = f"SMS demo alert for property {property_obj.name}, event {event.id}"
-    log_notification(db, event, NotificationChannel.SMS, NotificationStatus.SENT, detail)
+
+    if not settings.telegram_bot_token or not chat_id:
+        log_notification(
+            db,
+            event,
+            NotificationChannel.TELEGRAM,
+            NotificationStatus.FAILED,
+            "Telegram is enabled but bot token or chat id is missing",
+        )
+        return
+
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": (
+            "Owner confirmed intruder. "
+            f"Property={property_obj.name}, event_id={event.id}, score={event.similarity_score}"
+        ),
+    }
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            if 200 <= response.status < 300:
+                log_notification(db, event, NotificationChannel.TELEGRAM, NotificationStatus.SENT, "Telegram sent")
+            else:
+                log_notification(
+                    db,
+                    event,
+                    NotificationChannel.TELEGRAM,
+                    NotificationStatus.FAILED,
+                    f"Telegram API returned status {response.status}",
+                )
+    except Exception as exc:
+        log_notification(db, event, NotificationChannel.TELEGRAM, NotificationStatus.FAILED, str(exc))
 
 
 def send_email_alert(db, event: Event, property_obj: Property, recipient: str | None) -> None:
@@ -57,7 +98,6 @@ def run_owner_notification_flow(db, event: Event, property_obj: Property, owner_
     send_push_notification_stub(db, event, property_obj)
     if event.ai_status.value in {"intruder", "human_review"}:
         send_email_alert(db, event, property_obj, owner_email)
-        send_sms_demo(db, event, property_obj)
 
 
 def run_owner_notification_flow_task(event_id: int, property_id: int, owner_email: str | None) -> None:
@@ -73,19 +113,14 @@ def run_owner_notification_flow_task(event_id: int, property_id: int, owner_emai
 
 
 def run_owner_intruder_confirmation_task(event_id: int, property_id: int) -> None:
-    """
-    Triggered when the owner confirms an intruder on a human_review event.
-
-    For demo scope this reuses the existing notification channels and logs a clear
-    audit trail entry, so the app can show that confirmation actions happened.
-    """
     db = SessionLocal()
     try:
         event = db.get(Event, event_id)
         property_obj = db.get(Property, property_id)
         if not event or not property_obj:
             return
-
+        if event.ai_status.value != "human_review" or not event.verified_intruder:
+            return
         owner_email = property_obj.user.email if property_obj.user else None
         log_notification(
             db,
@@ -95,6 +130,6 @@ def run_owner_intruder_confirmation_task(event_id: int, property_id: int) -> Non
             f"Owner confirmed intruder for event {event.id} at property={property_obj.name}",
         )
         send_email_alert(db, event, property_obj, owner_email)
-        send_sms_demo(db, event, property_obj)
+        send_telegram_alert(db, event, property_obj, settings.telegram_fake_chat_id)
     finally:
         db.close()

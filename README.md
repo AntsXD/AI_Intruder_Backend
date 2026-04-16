@@ -14,7 +14,7 @@ This backend connects the AI detection service and mobile application for a demo
   - `similarity_score < 50`: `intruder`
   - `50 <= similarity_score <= 70`: `human_review`
 - Database: SQLite for demo.
-- Notifications: push (FCM-ready stub), email (SMTP), SMS demo hook (optional), and demo alarm flag for high-confidence intruder.
+- Notifications: push (FCM-ready stub), email (SMTP), and Telegram alerts sent after owner confirms a human-review event is an intruder.
 - Camera feed forwarding: secure camera stream config + signed playback URLs + HTTP proxy forwarding endpoint.
 - Image storage: filesystem under `storage/` with authenticated data access model at API level.
 

@@ -129,7 +129,7 @@ erDiagram
    - `protocols_activated`: Whether response protocols were triggered
    - `expires_at`: Automatically set to 72 hours after `occurred_at`
 4. **Protocols**: Response procedures assigned per property (e.g., "sound alarm", "call police")
-5. **Notifications**: Tracked per event via channel (PUSH, EMAIL, SMS) and status (SENT, FAILED)
+5. **Notifications**: Tracked per event via channel (PUSH, EMAIL, TELEGRAM) and status (SENT, FAILED)
 6. **Camera Streams**: One per property; supports HTTP proxy, external HLS, or WebRTC
 
 ## Cascade Rules
