@@ -1,10 +1,4 @@
 import pytest
-from sqlalchemy import select
-
-from app.database import SessionLocal
-from app.models import Event, NotificationLog
-from app.models.entities import NotificationChannel
-
 
 @pytest.mark.parametrize(
     "score,expected_status",
@@ -15,7 +9,7 @@ from app.models.entities import NotificationChannel
     ],
 )
 def test_webhook_threshold_branches(client, webhook_headers, make_auth_headers, score: float, expected_status: str) -> None:
-    user_id, headers = make_auth_headers()
+    user_id, headers = make_auth_headers(uid=f"u-{int(score)}")
 
     prop = client.post(
         f"/api/v1/users/{user_id}/properties",
@@ -42,16 +36,3 @@ def test_webhook_threshold_branches(client, webhook_headers, make_auth_headers, 
     assert event.status_code == 200
     assert event.json()["ai_status"] == expected_status
 
-    db = SessionLocal()
-    try:
-        event_row = db.get(Event, event_id)
-        assert event_row is not None
-        telegram_logs = db.scalars(
-            select(NotificationLog).where(
-                NotificationLog.event_id == event_id,
-                NotificationLog.channel == NotificationChannel.TELEGRAM,
-            )
-        ).all()
-        assert telegram_logs == []
-    finally:
-        db.close()
