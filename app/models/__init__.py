@@ -10,6 +10,7 @@ from app.models.entities import (
     StreamType,
     User,
     UserConsent,
+    UserDeviceToken,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "StreamType",
     "Event",
     "NotificationLog",
+    "UserDeviceToken",
 ]

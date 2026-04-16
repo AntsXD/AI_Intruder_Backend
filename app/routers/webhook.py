@@ -52,6 +52,6 @@ async def intruder_webhook(
     db.refresh(event)
 
     owner_email = property_obj.user.email if property_obj.user else None
-    background_tasks.add_task(run_owner_notification_flow_task, event.id, property_obj.id, owner_email)
+    background_tasks.add_task(run_owner_notification_flow_task, event.id, property_obj.id, owner_email, payload.person_name)
 
     return {"event_id": event.id, "status": event.ai_status.value}

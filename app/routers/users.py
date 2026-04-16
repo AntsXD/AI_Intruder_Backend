@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.orm import Session
@@ -13,9 +13,12 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from app.dependencies import ensure_user_scope, get_current_user, get_db_session
-from app.models import Event, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent
+from app.models import Event, Person, PersonPhoto, Property, Protocol, ProtocolAssignment, User, UserConsent, UserDeviceToken
 from app.models.entities import EventStatus
 from app.schemas.schemas import (
+    DeviceTokenDeleteRequest,
+    DeviceTokenUpsertRequest,
+    EventDetailOut,
     EventOut,
     PersonActivationResponse,
     PersonCreate,
@@ -32,7 +35,6 @@ from app.schemas.schemas import (
 )
 from app.config import settings
 from app.services.file_service import remove_dir_if_exists, remove_file_if_exists, save_person_photo, to_storage_relative
-from app.services.notification_service import run_owner_intruder_confirmation_task
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -73,6 +75,40 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/{user_id}/devices/fcm-token")
+def upsert_fcm_token(
+    user_id: int,
+    payload: DeviceTokenUpsertRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    row = db.scalar(select(UserDeviceToken).where(UserDeviceToken.token == payload.token))
+    if not row:
+        row = UserDeviceToken(user_id=user_id, token=payload.token, device_name=payload.device_name)
+        db.add(row)
+    else:
+        row.user_id = user_id
+        row.device_name = payload.device_name
+    db.commit()
+    return {"message": "FCM token saved"}
+
+
+@router.delete("/{user_id}/devices/fcm-token")
+def delete_fcm_token(
+    user_id: int,
+    payload: DeviceTokenDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    ensure_user_scope(user_id, current_user)
+    row = db.scalar(select(UserDeviceToken).where(UserDeviceToken.user_id == user_id, UserDeviceToken.token == payload.token))
+    if row:
+        db.delete(row)
+        db.commit()
+    return {"message": "FCM token removed"}
 
 
 @router.delete("/{user_id}")
@@ -516,20 +552,46 @@ def list_events(
     return list(rows)
 
 
-@router.get("/{user_id}/properties/{pid}/events/{eid}", response_model=EventOut)
+@router.get("/{user_id}/properties/{pid}/events/{eid}", response_model=EventDetailOut)
 def get_event(
     user_id: int,
     pid: int,
     eid: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db_session),
-) -> EventOut:
+) -> EventDetailOut:
     ensure_user_scope(user_id, current_user)
     _get_property_for_user(db, user_id, pid)
     event = db.scalar(select(Event).where(and_(Event.id == eid, Event.property_id == pid)))
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-    return event
+
+    if not event.snapshot_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot path missing")
+
+    snapshot_file = Path(event.snapshot_path)
+    if not snapshot_file.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot file not found on disk")
+
+    with open(snapshot_file, "rb") as f:
+        snapshot_base64 = base64.b64encode(f.read()).decode("utf-8")
+
+    return EventDetailOut(
+        id=event.id,
+        property_id=event.property_id,
+        person_id=event.person_id,
+        similarity_score=event.similarity_score,
+        ai_status=event.ai_status.value,
+        snapshot_path=event.snapshot_path,
+        occurred_at=event.occurred_at,
+        note=event.note,
+        verified_intruder=event.verified_intruder,
+        protocols_activated=event.protocols_activated,
+        distance_meters=event.distance_meters,
+        dwell_time_seconds=event.dwell_time_seconds,
+        expires_at=event.expires_at,
+        snapshot_base64=snapshot_base64,
+    )
 
 
 @router.post("/{user_id}/properties/{pid}/events/{eid}/verify")
@@ -537,13 +599,12 @@ def verify_event(
     user_id: int,
     pid: int,
     eid: int,
-    background_tasks: BackgroundTasks,
     payload: VerifyEventRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ) -> dict[str, str]:
     ensure_user_scope(user_id, current_user)
-    property_obj = _get_property_for_user(db, user_id, pid)
+    _get_property_for_user(db, user_id, pid)
     event = db.scalar(select(Event).where(and_(Event.id == eid, Event.property_id == pid)))
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
@@ -554,6 +615,4 @@ def verify_event(
     event.verified_intruder = payload.confirmed_intruder
     event.note = "Owner confirmed intruder" if payload.confirmed_intruder else "Owner dismissed event"
     db.commit()
-    if payload.confirmed_intruder:
-        background_tasks.add_task(run_owner_intruder_confirmation_task, event.id, property_obj.id)
     return {"message": "Event verification recorded"}

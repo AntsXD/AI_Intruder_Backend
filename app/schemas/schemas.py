@@ -37,6 +37,15 @@ class UserUpdate(BaseModel):
     phone_number: str | None = None
 
 
+class DeviceTokenUpsertRequest(BaseModel):
+    token: str = Field(min_length=20)
+    device_name: str | None = None
+
+
+class DeviceTokenDeleteRequest(BaseModel):
+    token: str = Field(min_length=20)
+
+
 class UserOut(BaseModel):
     id: int
     firebase_uid: str
@@ -121,6 +130,11 @@ class EventOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EventDetailOut(EventOut):
+    snapshot_base64: str
+    snapshot_mime_type: str = "image/jpeg"
+
+
 class VerifyEventRequest(BaseModel):
     confirmed_intruder: bool
 
@@ -129,6 +143,7 @@ class IntruderWebhookRequest(BaseModel):
     property_id: int
     similarity_score: float = Field(ge=0, le=100)
     person_id: int | None = None
+    person_name: str | None = None
     snapshot_base64: str
     occurred_at: datetime | None = None
     note: str | None = None
