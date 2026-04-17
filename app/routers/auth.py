@@ -19,6 +19,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/verify-token", response_model=TokenResponse)
 def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_session)) -> TokenResponse:
+    print("Firebase token received:", payload.firebase_token[:20], "...")
     identity = verify_firebase_token(payload.firebase_token)
     # Guard :reject identity with no email before touching the database
     if not identity.get("email"):

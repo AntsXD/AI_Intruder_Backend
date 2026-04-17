@@ -52,6 +52,7 @@ def verify_firebase_token(firebase_token: str) -> dict[str, Any]:
     init_firebase()
 
     if not _firebase_initialized or auth is None:
+        logger.error(f"Firebase not initialized. available={_firebase_available}, initialized={_firebase_initialized}, auth={auth}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Firebase is not configured on the server. Contact support.",
@@ -65,6 +66,7 @@ def verify_firebase_token(firebase_token: str) -> dict[str, Any]:
             "name":  decoded.get("name") or None,
         }
     except Exception as exc:
+        logger.error(f"Firebase token verification failed: {exc}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired Firebase token."
