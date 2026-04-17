@@ -78,7 +78,7 @@ copy .env.example .env
 
 4. Start the API.
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Docs:
