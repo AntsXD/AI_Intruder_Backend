@@ -1,5 +1,8 @@
 import logging
 import smtplib
+import json
+import urllib.error
+import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -195,19 +198,14 @@ def run_owner_notification_flow_task(
 
 
 def run_owner_intruder_confirmation_task(event_id: int, property_id: int) -> None:
-    """
-    Triggered when the owner confirms an intruder on a human_review event.
-
-    For demo scope this reuses the existing notification channels and logs a clear
-    audit trail entry, so the app can show that confirmation actions happened.
-    """
     db = SessionLocal()
     try:
         event = db.get(Event, event_id)
         property_obj = db.get(Property, property_id)
         if not event or not property_obj:
             return
-
+        if event.ai_status.value != "human_review" or not event.verified_intruder:
+            return
         owner_email = property_obj.user.email if property_obj.user else None
         log_notification(
             db,
@@ -217,6 +215,6 @@ def run_owner_intruder_confirmation_task(event_id: int, property_id: int) -> Non
             f"Owner confirmed intruder for event {event.id} at property={property_obj.name}",
         )
         send_email_alert(db, event, property_obj, owner_email)
-        send_sms_demo(db, event, property_obj)
+        send_sms_demo(db, event, property_obj, settings.telegram_fake_chat_id)
     finally:
         db.close()

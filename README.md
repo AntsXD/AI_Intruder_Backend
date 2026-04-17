@@ -19,6 +19,19 @@ Backend service for an intruder-detection demo system. It exposes authenticated 
 - Firebase Admin SDK (token verification and optional FCM sending)
 
 ## Project Structure
+## Key Decisions
+- Authentication: Firebase ID token verification + backend-issued JWT access/refresh tokens.
+- AI Integration: secure webhook receives events from AI service.
+- Decision Matrix:
+  - `similarity_score > 70`: `authorized`
+  - `similarity_score < 50`: `intruder`
+  - `50 <= similarity_score <= 70`: `human_review`
+- Database: SQLite for demo.
+- Notifications: push (FCM-ready stub), email (SMTP), and Telegram alerts sent after owner confirms a human-review event is an intruder.
+- Camera feed forwarding: secure camera stream config + signed playback URLs + HTTP proxy forwarding endpoint.
+- Image storage: filesystem under `storage/` with authenticated data access model at API level.
+
+## Project Layout
 ```text
 app/
   main.py
