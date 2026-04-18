@@ -2,8 +2,8 @@ import requests
 from app.config import settings
 
 WEB_API_KEY = settings.firebase_web_api_key
-TEST_EMAIL    = "christy.n.chamoun@gmail.com"
-TEST_PASSWORD = "TestTest123@!"
+TEST_EMAIL    = "test_front_back@hotmail.com"
+TEST_PASSWORD = "Test1234@"
 
 response = requests.post(
     f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={WEB_API_KEY}",
