@@ -146,7 +146,6 @@ class IntruderWebhookRequest(BaseModel):
     person_name: str | None = None
     snapshot_base64: str
     occurred_at: datetime | None = None
-    note: str | None = None
 
 
 class CameraFeedUpsertRequest(BaseModel):

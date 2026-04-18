@@ -44,7 +44,6 @@ async def intruder_webhook(
         ai_status=event_status,
         snapshot_path=snapshot_path,
         occurred_at=payload.occurred_at or datetime.utcnow(),
-        note=payload.note,
         verified_intruder=False,
     )
     db.add(event)
