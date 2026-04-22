@@ -244,22 +244,6 @@ def list_persons(
     return list(rows)
 
 
-@router.get("/{user_id}/properties/{pid}/persons/display-photos", response_model=list[PersonPhotoOut])
-def list_persons_display_photos(
-    user_id: int,
-    pid: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db_session),
-) -> list[PersonPhoto]:
-    ensure_user_scope(user_id, current_user)
-    _get_property_for_user(db, user_id, pid)
-    rows = db.scalars(
-        select(PersonPhoto)
-        .join(Person, PersonPhoto.person_id == Person.id)
-        .where(Person.property_id == pid, Person.is_active == True, PersonPhoto.is_display == True)
-    ).all()
-    return list(rows)
-
 
 @router.post("/{user_id}/properties/{pid}/persons", response_model=PersonOut)
 def create_person(
@@ -389,6 +373,22 @@ def activate_person(
         has_display_photo=True,
         message="Person activated for recognition",
     )
+
+
+@router.get("/{user_id}/properties/{pid}/persons/{person_id}/photos", response_model=list[PersonPhotoOut])
+def list_person_photos(
+    user_id: int,
+    pid: int,
+    person_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> list[PersonPhoto]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    person = db.scalar(select(Person).where(and_(Person.id == person_id, Person.property_id == pid)))
+    if not person:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
+    return db.scalars(select(PersonPhoto).where(PersonPhoto.person_id == person_id)).all()
 
 
 @router.post("/{user_id}/properties/{pid}/persons/{person_id}/photos")
