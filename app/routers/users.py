@@ -23,6 +23,7 @@ from app.schemas.schemas import (
     PersonActivationResponse,
     PersonCreate,
     PersonOut,
+    PersonPhotoOut,
     PersonUpdate,
     PropertyCreate,
     PropertyOut,
@@ -240,6 +241,23 @@ def list_persons(
     ensure_user_scope(user_id, current_user)
     _get_property_for_user(db, user_id, pid)
     rows = db.scalars(select(Person).where(Person.property_id == pid).order_by(Person.id.desc())).all()
+    return list(rows)
+
+
+@router.get("/{user_id}/properties/{pid}/persons/display-photos", response_model=list[PersonPhotoOut])
+def list_persons_display_photos(
+    user_id: int,
+    pid: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> list[PersonPhoto]:
+    ensure_user_scope(user_id, current_user)
+    _get_property_for_user(db, user_id, pid)
+    rows = db.scalars(
+        select(PersonPhoto)
+        .join(Person, PersonPhoto.person_id == Person.id)
+        .where(Person.property_id == pid, Person.is_active == True, PersonPhoto.is_display == True)
+    ).all()
     return list(rows)
 
 

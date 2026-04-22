@@ -77,6 +77,17 @@ class PropertyOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PersonPhotoOut(BaseModel):
+    id: int
+    person_id: int
+    photo_type: str | None
+    file_path: str
+    is_display: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class PersonCreate(BaseModel):
     name: str
 
