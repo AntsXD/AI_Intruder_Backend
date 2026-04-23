@@ -132,7 +132,7 @@ class EventOut(BaseModel):
     snapshot_path: str
     occurred_at: datetime
     note: str | None
-    verified_intruder: bool
+    verified_intruder: bool | None = None
     protocols_activated: bool
     distance_meters: float | None
     dwell_time_seconds: float | None

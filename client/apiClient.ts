@@ -110,7 +110,7 @@ export interface EventOut {
   snapshot_path: string;
   occurred_at: string;
   note?: string | null;
-  verified_intruder: boolean;
+  verified_intruder: boolean | null;
   protocols_activated: boolean;
   distance_meters?: number | null;
   dwell_time_seconds?: number | null;

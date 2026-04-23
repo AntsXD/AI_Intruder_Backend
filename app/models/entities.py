@@ -157,7 +157,7 @@ class Event(Base):
     snapshot_path: Mapped[str] = mapped_column(String(500))
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    verified_intruder: Mapped[bool] = mapped_column(Boolean, default=False)
+    verified_intruder: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     protocols_activated: Mapped[bool] = mapped_column(Boolean, default=False)
     distance_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
     dwell_time_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
