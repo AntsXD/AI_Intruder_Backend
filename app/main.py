@@ -22,6 +22,8 @@ async def lifespan(_: FastAPI):
         Base.metadata.create_all(bind=engine)
         ensure_sqlite_schema_compatibility()
         ensure_default_protocols()
+    from app.services.firebase_service import init_firebase
+    init_firebase()
     yield
 
 
