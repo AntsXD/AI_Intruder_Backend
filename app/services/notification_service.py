@@ -80,13 +80,6 @@ def _build_email_content(event: Event, property_name: str, person_name: str | No
     return subject, body
 
 
-def _build_sms_detail(event: Event, property_name: str, person_name: str | None) -> str:
-    if event.ai_status == EventStatus.AUTHORIZED:
-        label = person_name or "known person"
-        return f"SMS demo: known_person {label} at {property_name} (event {event.id})"
-    if event.ai_status == EventStatus.HUMAN_REVIEW:
-        return f"SMS demo: unknown_person at {property_name} (event {event.id})"
-    return f"SMS demo: intruder at {property_name} (event {event.id})"
 
 
 def send_push_notification(db, event: Event, property_obj: Property, person_name: str | None = None) -> None:
@@ -144,12 +137,6 @@ def send_push_notification(db, event: Event, property_obj: Property, person_name
 
 
 
-def send_sms_demo(db, event: Event, property_obj: Property, person_name: str | None = None) -> None:
-    if not settings.sms_enabled:
-        return
-    detail = _build_sms_detail(event, property_obj.name, person_name)
-    log_notification(db, event, NotificationChannel.SMS, NotificationStatus.SENT, detail)
-
 
 def send_email_alert(db, event: Event, property_obj: Property, recipient: str | None, person_name: str | None = None) -> None:
     if not settings.smtp_enabled or not recipient:
@@ -182,7 +169,7 @@ def run_owner_notification_flow(
 ) -> None:
     send_push_notification(db, event, property_obj, person_name)
     send_email_alert(db, event, property_obj, owner_email, person_name)
-    send_sms_demo(db, event, property_obj, person_name)
+   
 
 
 def run_owner_notification_flow_task(
@@ -220,6 +207,6 @@ def run_owner_intruder_confirmation_task(event_id: int, property_id: int) -> Non
             f"Owner confirmed intruder for event {event.id} at property={property_obj.name}",
         )
         send_email_alert(db, event, property_obj, owner_email)
-        send_sms_demo(db, event, property_obj, settings.telegram_fake_chat_id)
+        
     finally:
         db.close()
