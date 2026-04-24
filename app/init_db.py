@@ -1,10 +1,12 @@
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, select, text
 from sqlalchemy.schema import Column
 
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
 
 # Ensure model metadata is registered before create_all.
 from app import models  # noqa: F401
+from app.models import Protocol
+from app.protocols import DEFAULT_PROTOCOLS
 
 
 def _migrate_sqlite_events_verified_intruder_nullable(connection) -> None:
@@ -120,9 +122,30 @@ def ensure_sqlite_schema_compatibility() -> None:
             _migrate_sqlite_events_verified_intruder_nullable(connection)
 
 
+def ensure_default_protocols() -> None:
+    protocol_names = [name for name, _ in DEFAULT_PROTOCOLS]
+
+    with SessionLocal() as db:
+        existing_names = {
+            name
+            for name in db.scalars(select(Protocol.name).where(Protocol.name.in_(protocol_names))).all()
+        }
+
+        created = False
+        for name, description in DEFAULT_PROTOCOLS:
+            if name in existing_names:
+                continue
+            db.add(Protocol(name=name, description=description))
+            created = True
+
+        if created:
+            db.commit()
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_schema_compatibility()
+    ensure_default_protocols()
 
 
 if __name__ == "__main__":

@@ -35,6 +35,7 @@ from app.schemas.schemas import (
     VerifyEventRequest,
 )
 from app.config import settings
+from app.protocols import SUPPORTED_PROTOCOL_NAMES
 from app.services.file_service import remove_dir_if_exists, remove_file_if_exists, save_person_photo, to_storage_relative
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -522,16 +523,24 @@ def set_protocols(
 
     result: list[Protocol] = []
     seen_names: set[str] = set()
+    allowed_names = ", ".join(sorted(SUPPORTED_PROTOCOL_NAMES))
     for item in payload:
-        key = item.name.strip().lower()
+        protocol_name = item.name.strip()
+        if protocol_name not in SUPPORTED_PROTOCOL_NAMES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported protocol '{protocol_name}'. Allowed values: {allowed_names}",
+            )
+
+        key = protocol_name.lower()
         if key in seen_names:
             continue
         seen_names.add(key)
 
-        protocol = db.scalar(select(Protocol).where(Protocol.name == item.name))
+        protocol = db.scalar(select(Protocol).where(Protocol.name == protocol_name))
         if not protocol:
             protocol = Protocol(
-                name=item.name,
+                name=protocol_name,
                 description=item.description,
             )
             db.add(protocol)
