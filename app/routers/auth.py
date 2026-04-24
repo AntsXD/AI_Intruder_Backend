@@ -28,7 +28,18 @@ def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_sessi
             detail="An email address is required to use this app."
         )
 
-    user = db.scalar(select(User).where(User.firebase_uid == identity["uid"]))
+    identity_uid = identity["uid"]
+    identity_email = identity.get("email")
+
+    user = db.scalar(select(User).where(User.firebase_uid == identity_uid))
+    if not user and identity_email:
+        # Preserve existing account data when Firebase UID changes (provider/linking migrations).
+        user = db.scalar(select(User).where(User.email == identity_email))
+        if user:
+            user.firebase_uid = identity_uid
+            db.commit()
+            db.refresh(user)
+
     if not user:
         if not payload.consent_accepted:
             raise HTTPException(
@@ -36,8 +47,8 @@ def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_sessi
                 detail="You must accept the privacy policy to create an account."
             )
         user = User(
-            firebase_uid=identity["uid"],
-            email=identity.get("email"),
+            firebase_uid=identity_uid,
+            email=identity_email,
             full_name=identity.get("name") or "Unknown User",
         )
         db.add(user)
@@ -47,9 +58,12 @@ def verify_token(payload: VerifyTokenRequest, db: Session = Depends(get_db_sessi
         db.refresh(user)
     else:
         updated = False
+        if user.firebase_uid != identity_uid:
+            user.firebase_uid = identity_uid
+            updated = True
         # Keep backend profile in sync with Firebase identity claims.
-        if identity.get("email") and user.email != identity["email"]:
-            user.email = identity["email"]
+        if identity_email and user.email != identity_email:
+            user.email = identity_email
             updated = True
         if identity.get("name") and user.full_name != identity["name"]:
             user.full_name = identity["name"]
