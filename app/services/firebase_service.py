@@ -59,7 +59,7 @@ def verify_firebase_token(firebase_token: str) -> dict[str, Any]:
         )
 
     try:
-        decoded = auth.verify_id_token(firebase_token)
+        decoded = auth.verify_id_token(firebase_token, clock_skew_seconds=10)
         return {
             "uid":   decoded.get("uid", ""),
             "email": decoded.get("email") or None,
