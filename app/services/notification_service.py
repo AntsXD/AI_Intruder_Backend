@@ -95,14 +95,14 @@ def send_push_notification(db, event: Event, property_obj: Property, person_name
         return
 
     owner_id = property_obj.user_id
-    tokens = db.scalars(select(UserDeviceToken.token).where(UserDeviceToken.user_id == owner_id)).all()
-    if not tokens:
+    token_rows = db.scalars(select(UserDeviceToken).where(UserDeviceToken.user_id == owner_id)).all()
+    if not token_rows:
         logger.warning("No FCM device tokens registered for user %s", owner_id)
         log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.FAILED, "No FCM device tokens registered")
         return
 
-    logger.info("Sending FCM notification to %d device(s) for event %s", len(tokens), event.id)
-    
+    logger.info("Sending FCM notification to %d device(s) for event %s", len(token_rows), event.id)
+
     resolved_person_name = person_name
     if not resolved_person_name and event.person_id:
         person = db.get(Person, event.person_id)
@@ -122,12 +122,17 @@ def send_push_notification(db, event: Event, property_obj: Property, person_name
 
     success = 0
     failed = 0
-    for token in tokens:
+    for row in token_rows:
         try:
-            send_fcm_notification(token=token, title=title, body=body, data=data)
+            send_fcm_notification(token=row.token, title=title, body=body, data=data)
             success += 1
         except Exception as exc:
-            logger.warning("FCM send failed for token %r: %s", token, exc)
+            if "NotRegistered" in str(exc) or "InvalidRegistration" in str(exc):
+                logger.warning("Removing stale FCM token for user %s: %s", owner_id, exc)
+                db.delete(row)
+                db.commit()
+            else:
+                logger.warning("FCM send failed for token %r: %s", row.token, exc)
             failed += 1
 
     if success > 0:
