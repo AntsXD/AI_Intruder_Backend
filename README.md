@@ -24,8 +24,7 @@ Backend service for an intruder-detection demo system. It exposes authenticated 
 - AI Integration: secure webhook receives events from AI service.
 - Decision Matrix:
   - `similarity_score > 70`: `authorized`
-  - `similarity_score < 50`: `intruder`
-  - `50 <= similarity_score <= 70`: `human_review`
+  - `0 <= similarity_score <= 70`: `human_review`
 - Database: SQLite for demo.
 - Notifications: push (FCM-ready stub), email (SMTP), and Telegram alerts sent after owner confirms a human-review event is an intruder.
 - Camera feed forwarding: secure camera stream config + signed playback URLs + HTTP proxy forwarding endpoint.
@@ -146,8 +145,7 @@ Notes:
 
 ## Decision Thresholds
 - similarity_score greater than 70: authorized
-- similarity_score less than 50: intruder
-- similarity_score from 50 to 70 inclusive: human_review
+- similarity_score from 0 to 70 inclusive: human_review
 
 ## API Endpoints
 Base prefix: /api/v1
