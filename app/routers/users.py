@@ -8,6 +8,7 @@ import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -89,12 +90,14 @@ def upsert_fcm_token(
     ensure_user_scope(user_id, current_user)
     row = db.scalar(select(UserDeviceToken).where(UserDeviceToken.token == payload.token))
     if not row:
-        row = UserDeviceToken(user_id=user_id, token=payload.token, device_name=payload.device_name)
-        db.add(row)
+        db.add(UserDeviceToken(user_id=user_id, token=payload.token, device_name=payload.device_name))
     else:
         row.user_id = user_id
         row.device_name = payload.device_name
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
     return {"message": "FCM token saved"}
 
 
