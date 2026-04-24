@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -38,6 +38,7 @@ from app.schemas.schemas import (
 from app.config import settings
 from app.protocols import SUPPORTED_PROTOCOL_NAMES
 from app.services.file_service import remove_dir_if_exists, remove_file_if_exists, save_person_photo, to_storage_relative
+from app.services.notification_service import run_owner_intruder_confirmation_task
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -630,6 +631,7 @@ def verify_event(
     pid: int,
     eid: int,
     payload: VerifyEventRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ) -> dict[str, str]:
@@ -645,4 +647,8 @@ def verify_event(
     event.verified_intruder = payload.confirmed_intruder
     event.note = "Owner confirmed intruder" if payload.confirmed_intruder else "Owner dismissed event"
     db.commit()
+
+    if payload.confirmed_intruder:
+        background_tasks.add_task(run_owner_intruder_confirmation_task, event.id, pid)
+
     return {"message": "Event verification recorded"}

@@ -2,6 +2,7 @@ import logging
 import smtplib
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -80,8 +81,6 @@ def _build_email_content(event: Event, property_name: str, person_name: str | No
     return subject, body
 
 
-
-
 def send_push_notification(db, event: Event, property_obj: Property, person_name: str | None = None) -> None:
     if not settings.fcm_enabled:
         logger.debug("FCM disabled — skipping push for event %s", event.id)
@@ -136,8 +135,6 @@ def send_push_notification(db, event: Event, property_obj: Property, person_name
         log_notification(db, event, NotificationChannel.PUSH, NotificationStatus.FAILED, f"FCM failed for {failed} device(s)")
 
 
-
-
 def send_email_alert(db, event: Event, property_obj: Property, recipient: str | None, person_name: str | None = None) -> None:
     if not settings.smtp_enabled or not recipient:
         return
@@ -160,6 +157,37 @@ def send_email_alert(db, event: Event, property_obj: Property, recipient: str | 
         log_notification(db, event, NotificationChannel.EMAIL, NotificationStatus.FAILED, str(exc))
 
 
+def send_telegram_alert(db, event: Event, property_obj: Property) -> None:
+    if not settings.telegram_enabled:
+        return
+    if not settings.telegram_bot_token or not settings.telegram_fake_chat_id:
+        logger.warning("Telegram not configured — missing bot token or chat id")
+        return
+
+    text = (
+        f"Intruder Confirmed\n"
+        f"Property: {property_obj.name}\n"
+        f"Score: {event.similarity_score:.1f}\n"
+        f"Event ID: {event.id}"
+    )
+    url = (
+        f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+        f"?chat_id={settings.telegram_fake_chat_id}"
+        f"&text={urllib.parse.quote(text)}"
+    )
+
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            if resp.status == 200:
+                log_notification(db, event, NotificationChannel.TELEGRAM, NotificationStatus.SENT, f"Telegram sent to {settings.telegram_fake_chat_id}")
+                logger.info("Telegram alert sent for event %s", event.id)
+            else:
+                log_notification(db, event, NotificationChannel.TELEGRAM, NotificationStatus.FAILED, f"HTTP {resp.status}")
+    except urllib.error.URLError as exc:
+        log_notification(db, event, NotificationChannel.TELEGRAM, NotificationStatus.FAILED, str(exc))
+        logger.warning("Telegram alert failed for event %s: %s", event.id, exc)
+
+
 def run_owner_notification_flow(
     db,
     event: Event,
@@ -169,7 +197,6 @@ def run_owner_notification_flow(
 ) -> None:
     send_push_notification(db, event, property_obj, person_name)
     send_email_alert(db, event, property_obj, owner_email, person_name)
-   
 
 
 def run_owner_notification_flow_task(
@@ -198,15 +225,6 @@ def run_owner_intruder_confirmation_task(event_id: int, property_id: int) -> Non
             return
         if event.ai_status.value != "human_review" or not event.verified_intruder:
             return
-        owner_email = property_obj.user.email if property_obj.user else None
-        log_notification(
-            db,
-            event,
-            NotificationChannel.PUSH,
-            NotificationStatus.SENT,
-            f"Owner confirmed intruder for event {event.id} at property={property_obj.name}",
-        )
-        send_email_alert(db, event, property_obj, owner_email)
-        
+        send_telegram_alert(db, event, property_obj)
     finally:
         db.close()
