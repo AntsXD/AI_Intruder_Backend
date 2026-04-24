@@ -217,23 +217,16 @@ def run_owner_notification_flow_task(
 
 
 def run_owner_intruder_confirmation_task(event_id: int, property_id: int) -> None:
-    print(f"[TELEGRAM TASK] started event_id={event_id} property_id={property_id}", flush=True)
     db = SessionLocal()
     try:
         event = db.get(Event, event_id)
         property_obj = db.get(Property, property_id)
-        print(f"[TELEGRAM TASK] event={event} property={property_obj}", flush=True)
         if not event or not property_obj:
-            print("[TELEGRAM TASK] event or property not found, aborting", flush=True)
             return
-        print(f"[TELEGRAM TASK] ai_status={event.ai_status.value} verified_intruder={event.verified_intruder}", flush=True)
         if event.ai_status.value != "human_review" or not event.verified_intruder:
-            print("[TELEGRAM TASK] guard failed, aborting", flush=True)
             return
-        print("[TELEGRAM TASK] calling send_telegram_alert", flush=True)
         send_telegram_alert(db, event, property_obj)
-        print("[TELEGRAM TASK] done", flush=True)
     except Exception as exc:
-        print(f"[TELEGRAM TASK] exception: {exc}", flush=True)
+        logger.error("Telegram confirmation task failed for event %s: %s", event_id, exc)
     finally:
         db.close()
