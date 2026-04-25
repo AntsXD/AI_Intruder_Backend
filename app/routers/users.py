@@ -425,18 +425,15 @@ async def upload_person_photo(
     if not person:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
 
-    count = db.scalar(select(func.count(PersonPhoto.id)).where(PersonPhoto.person_id == person_id))
-    if count is not None and count >= 3:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A person can only have up to 3 photos")
-
-    # Prevent duplicate photo types
     existing_type = db.scalar(
         select(PersonPhoto).where(
             and_(PersonPhoto.person_id == person_id, PersonPhoto.photo_type == photo_type)
         )
     )
     if existing_type:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A {photo_type} photo already exists for this person")
+        remove_file_if_exists(existing_type.file_path)
+        db.delete(existing_type)
+        db.flush()
 
     path = await save_person_photo(user_id, pid, person_id, file)
     if is_display:
