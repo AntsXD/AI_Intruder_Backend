@@ -327,7 +327,7 @@ def delete_person(
         try:
             with httpx.Client(timeout=10) as client:
                 client.delete(
-                    f"{settings.ai_service_url}/persons/{person_id}",
+                    f"{settings.ai_service_url}/properties/{pid}/persons/{person_id}",
                     headers={"X-API-Key": settings.ai_service_api_key},
                 )
         except Exception as exc:
