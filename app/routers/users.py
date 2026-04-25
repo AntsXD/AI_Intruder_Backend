@@ -317,10 +317,22 @@ def delete_person(
     person = db.scalar(select(Person).where(and_(Person.id == person_id, Person.property_id == pid)))
     if not person:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
+    was_active = person.is_active
     for photo in person.photos:
         remove_file_if_exists(photo.file_path)
     db.delete(person)
     db.commit()
+
+    if settings.ai_service_url and was_active:
+        try:
+            with httpx.Client(timeout=10) as client:
+                client.delete(
+                    f"{settings.ai_service_url}/persons/{person_id}",
+                    headers={"X-API-Key": settings.ai_service_api_key},
+                )
+        except Exception as exc:
+            logger.warning("Failed to deregister person %d from AI: %s", person_id, exc)
+
     return {"message": "Person deleted"}
 
 
