@@ -183,6 +183,7 @@ Persons:
 - POST /users/{user_id}/properties/{pid}/persons/{person_id}/activate
 
 Person photos:
+- GET /users/{user_id}/properties/{pid}/persons/{person_id}/photos
 - POST /users/{user_id}/properties/{pid}/persons/{person_id}/photos
 - GET /users/{user_id}/properties/{pid}/persons/{person_id}/photos/{photo_id}
 - DELETE /users/{user_id}/properties/{pid}/persons/{person_id}/photos/{photo_id}
@@ -209,8 +210,9 @@ Webhook:
     - X-Webhook-Signature (format: sha256=<digest>)
 
 ## Behavioral Rules Worth Knowing
-- Person activation requires exactly 3 photos.
-- Each person photo type must be unique (face, left_profile, right_profile).
+- Person activation requires exactly 3 photos (one per type: face, left_profile, right_profile).
+- Uploading a photo of an existing type replaces it (upsert) — no 409 is returned.
+- Deleting an active person also calls the AI service to remove their embeddings.
 - Event verification is allowed only for human_review events.
 - Camera playback token is scoped to user and stream.
 - For external_hls and external_webrtc stream types, playback endpoint redirects.
