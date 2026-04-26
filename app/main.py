@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -15,6 +17,15 @@ from app.routers.webhook import router as webhook_router
 # Import models so SQLAlchemy metadata is fully registered before create_all.
 from app import models  # noqa: F401
 
+logger = logging.getLogger(__name__)
+
+
+async def _snapshot_cleanup_loop() -> None:
+    from app.services.notification_service import run_snapshot_cleanup
+    while True:
+        await asyncio.sleep(3600)
+        run_snapshot_cleanup()
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -24,7 +35,9 @@ async def lifespan(_: FastAPI):
         ensure_default_protocols()
     from app.services.firebase_service import init_firebase
     init_firebase()
+    task = asyncio.create_task(_snapshot_cleanup_loop())
     yield
+    task.cancel()
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)

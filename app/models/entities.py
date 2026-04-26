@@ -154,7 +154,7 @@ class Event(Base):
     person_id: Mapped[int | None] = mapped_column(ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
     similarity_score: Mapped[float] = mapped_column(Float)
     ai_status: Mapped[EventStatus] = mapped_column(SqlEnum(EventStatus), index=True)
-    snapshot_path: Mapped[str] = mapped_column(String(500))
+    snapshot_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     verified_intruder: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)

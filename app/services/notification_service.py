@@ -216,6 +216,34 @@ def run_owner_notification_flow_task(
         db.close()
 
 
+def run_snapshot_cleanup() -> None:
+    from datetime import datetime
+    from pathlib import Path
+    from sqlalchemy import select
+
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        expired = db.scalars(
+            select(Event).where(Event.expires_at <= now, Event.snapshot_path.isnot(None))
+        ).all()
+        deleted = 0
+        for event in expired:
+            if event.snapshot_path:
+                p = Path(event.snapshot_path)
+                if p.is_file():
+                    p.unlink()
+                    deleted += 1
+                event.snapshot_path = None
+        if expired:
+            db.commit()
+            logger.info("Snapshot cleanup: deleted %d file(s)", deleted)
+    except Exception as exc:
+        logger.error("Snapshot cleanup failed: %s", exc)
+    finally:
+        db.close()
+
+
 def run_owner_intruder_confirmation_task(event_id: int, property_id: int) -> None:
     db = SessionLocal()
     try:

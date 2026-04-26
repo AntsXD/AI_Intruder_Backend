@@ -129,7 +129,7 @@ class EventOut(BaseModel):
     person_id: int | None
     similarity_score: float
     ai_status: str
-    snapshot_path: str
+    snapshot_path: str | None
     occurred_at: datetime
     note: str | None
     verified_intruder: bool | None = None
