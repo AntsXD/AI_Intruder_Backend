@@ -101,6 +101,21 @@ def revoke_consent(
                 remove_file_if_exists(event.snapshot_path)
         remove_dir_if_exists(settings.storage_root_path / "persons" / str(current_user.id))
 
+        if settings.ai_service_url:
+            import httpx
+            with httpx.Client(timeout=10) as client:
+                for property_obj in current_user.properties:
+                    for person in property_obj.persons:
+                        if not person.is_active:
+                            continue
+                        try:
+                            client.delete(
+                                f"{settings.ai_service_url}/properties/{property_obj.id}/persons/{person.id}",
+                                headers={"X-API-Key": settings.ai_service_api_key},
+                            )
+                        except Exception:
+                            pass
+
         db.delete(current_user)
         db.commit()
         return {"message": "Consent revoked. Your account and all associated data have been deleted."}

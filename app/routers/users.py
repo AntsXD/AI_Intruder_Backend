@@ -147,6 +147,20 @@ def delete_user(
 
     remove_dir_if_exists(settings.storage_root_path / "persons" / str(user_id))
 
+    if settings.ai_service_url:
+        with httpx.Client(timeout=10) as client:
+            for property_obj in user.properties:
+                for person in property_obj.persons:
+                    if not person.is_active:
+                        continue
+                    try:
+                        client.delete(
+                            f"{settings.ai_service_url}/properties/{property_obj.id}/persons/{person.id}",
+                            headers={"X-API-Key": settings.ai_service_api_key},
+                        )
+                    except Exception as exc:
+                        logger.warning("Failed to deregister person %d from AI during account deletion: %s", person.id, exc)
+
     db.delete(user)
     db.commit()
     return {"message": "User and associated data deleted"}
@@ -444,6 +458,26 @@ async def upload_person_photo(
     db.add(photo)
     db.commit()
     db.refresh(photo)
+
+    if person.is_active and settings.ai_service_url:
+        db.refresh(person)
+        current_photos = person.photos
+        if len(current_photos) == 3:
+            try:
+                photos_payload = []
+                for p in current_photos:
+                    with open(p.file_path, "rb") as f:
+                        encoded = base64.b64encode(f.read()).decode("utf-8")
+                    photos_payload.append({"type": p.photo_type or "unknown", "data": encoded})
+                with httpx.Client(timeout=10) as client:
+                    client.post(
+                        f"{settings.ai_service_url}/persons/register",
+                        json={"person_id": person.id, "property_id": pid, "photos": photos_payload},
+                        headers={"X-API-Key": settings.ai_service_api_key},
+                    )
+            except Exception as exc:
+                logger.warning("Failed to re-register person %d with AI after photo update: %s", person.id, exc)
+
     return {"photo_id": photo.id, "file_path": to_storage_relative(photo.file_path), "photo_type": photo.photo_type}
 
 
